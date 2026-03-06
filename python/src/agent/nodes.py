@@ -103,19 +103,31 @@ def think(state: ClawState) -> dict:
     response = llm_with_tools.invoke(messages)
 
     # Extract tool calls from response (multiple allowed)
+    # If no tool calls, retry once with a nudge message
+    if not response.tool_calls:
+        logger.warning(f"Step {state['step']}: No tool call on first attempt, retrying...")
+        messages.append(response)
+        messages.append(HumanMessage(
+            content="반드시 도구를 호출해야 합니다. 위 스크린샷을 보고 다음 행동을 도구로 호출하세요."
+        ))
+        response = llm_with_tools.invoke(messages)
+        # Remove the retry messages so they don't pollute history
+        messages.pop()
+        messages.pop()
+
     if response.tool_calls:
         actions = [scene.tool_call_to_action(tc) for tc in response.tool_calls]
         for tc in response.tool_calls:
             logger.info(f"Step {state['step']}: Tool call: {tc['name']}({tc['args']})")
     else:
-        # Fallback: LLM responded with text instead of tool call
+        # Fallback after retry: LLM still didn't call a tool
         raw_text = response.content
         if isinstance(raw_text, list):
             raw_text = "".join(
                 part if isinstance(part, str) else part.get("text", "")
                 for part in raw_text
             )
-        logger.warning(f"Step {state['step']}: No tool call, raw text: {raw_text[:200]}")
+        logger.warning(f"Step {state['step']}: No tool call after retry, raw text: {raw_text[:200]}")
         actions = [{"type": "error", "reasoning": f"No tool call: {raw_text[:100]}"}]
 
     # Extract reasoning text from response.content
