@@ -1,10 +1,10 @@
-import json
 import logging
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from src.agent.prompts import SYSTEM_PROMPT, build_step_message
 from src.agent.state import ClawState
+from src.agent.tools import ALL_TOOLS, tool_call_to_action
 from src.config import settings
 from src.unity.client import UnitySimClient
 
@@ -37,7 +37,7 @@ def observe(state: ClawState) -> dict:
 
 
 def think(state: ClawState) -> dict:
-    """Send screenshot + context to LLM, parse JSON action."""
+    """Send screenshot + context to LLM with bound tools, extract tool call."""
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     api_key = state.get("api_key") or settings.google_api_key
@@ -48,6 +48,7 @@ def think(state: ClawState) -> dict:
         google_api_key=api_key,
         temperature=1.0,
     )
+    llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
     step_text = build_step_message(
         command=state["command"],
@@ -72,25 +73,46 @@ def think(state: ClawState) -> dict:
     messages = _strip_old_images(state.get("messages", []), keep_last=2)
     messages.append(user_message)
 
-    logger.info(f"Step {state['step']}: Sending to LLM ({model_name})...")
-    response = llm.invoke(messages)
-    raw_text = response.content
-    if isinstance(raw_text, list):
-        raw_text = "".join(
-            part if isinstance(part, str) else part.get("text", "")
-            for part in raw_text
-        )
-    logger.info(f"Step {state['step']}: LLM response: {raw_text[:200]}")
+    logger.info(f"Step {state['step']}: Sending to LLM ({model_name}) with tools...")
+    response = llm_with_tools.invoke(messages)
 
-    # Parse JSON action from response
-    action = _parse_action(raw_text)
+    # Extract tool call from response
+    if response.tool_calls:
+        tool_call = response.tool_calls[0]
+        action = tool_call_to_action(tool_call)
+        logger.info(f"Step {state['step']}: Tool call: {tool_call['name']}({tool_call['args']})")
+    else:
+        # Fallback: LLM responded with text instead of tool call
+        raw_text = response.content
+        if isinstance(raw_text, list):
+            raw_text = "".join(
+                part if isinstance(part, str) else part.get("text", "")
+                for part in raw_text
+            )
+        logger.warning(f"Step {state['step']}: No tool call, raw text: {raw_text[:200]}")
+        action = {"type": "error", "reasoning": f"No tool call: {raw_text[:100]}"}
 
-    # Add assistant response to history
+    # Build llm_response string for dashboard display
+    llm_response = ""
+    if response.tool_calls:
+        tc = response.tool_calls[0]
+        llm_response = f"Tool: {tc['name']}\nArgs: {tc['args']}"
+    else:
+        content = response.content
+        if isinstance(content, list):
+            llm_response = "".join(
+                part if isinstance(part, str) else part.get("text", "")
+                for part in content
+            )
+        else:
+            llm_response = content or ""
+
+    # Add AI response to history
     messages.append(response)
 
     return {
         "action": action,
-        "llm_response": raw_text,
+        "llm_response": llm_response,
         "messages": messages,
     }
 
@@ -117,6 +139,18 @@ def act(state: ClawState) -> dict:
     new_step = obs.get("step", state["step"] + 1)
     is_done = obs.get("done", False) or action.get("type") == "done"
 
+    # Add ToolMessage to conversation history so LLM sees the result
+    messages = list(state.get("messages", []))
+    last_ai_msg = messages[-1] if messages else None
+    if last_ai_msg and hasattr(last_ai_msg, "tool_calls") and last_ai_msg.tool_calls:
+        tool_call_id = last_ai_msg.tool_calls[0].get("id", "")
+        result_text = f"액션 실행 완료. 새 스크린샷이 다음 메시지에 첨부됩니다."
+        if is_done:
+            result_text = "에피소드 완료."
+        messages.append(
+            ToolMessage(content=result_text, tool_call_id=tool_call_id)
+        )
+
     return {
         "screenshot_base64": obs.get("screenshot_base64", ""),
         "camera_angle": obs.get("camera_angle", state["camera_angle"]),
@@ -124,6 +158,7 @@ def act(state: ClawState) -> dict:
         "done": is_done,
         "done_reason": action.get("reasoning", "") if is_done else "",
         "episode_log": episode_log,
+        "messages": messages,
     }
 
 
@@ -139,7 +174,6 @@ def check_done(state: ClawState) -> str:
 def _strip_old_images(messages: list, keep_last: int = 2) -> list:
     """Remove images from older messages to save tokens."""
     result = []
-    # Strip old images
     images_seen = 0
     for msg in reversed(messages):
         if isinstance(msg, HumanMessage) and isinstance(msg.content, list):
@@ -163,27 +197,3 @@ def _strip_old_images(messages: list, keep_last: int = 2) -> list:
 
     result.reverse()
     return result
-
-
-def _parse_action(raw_text: str) -> dict:
-    """Parse JSON action from LLM response text."""
-    text = raw_text.strip()
-    # Handle markdown code blocks
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = [l for l in lines if not l.startswith("```")]
-        text = "\n".join(lines).strip()
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        # Try to find JSON object in text
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start >= 0 and end > start:
-            try:
-                return json.loads(text[start:end])
-            except json.JSONDecodeError:
-                pass
-        logger.warning(f"Failed to parse action JSON: {text[:200]}")
-        return {"type": "error", "reasoning": f"Failed to parse: {text[:100]}"}

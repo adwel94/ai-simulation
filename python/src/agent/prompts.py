@@ -6,7 +6,7 @@ SYSTEM_PROMPT = """당신은 인형뽑기(크레인 게임)를 플레이하는 A
 - 물체가 가려지거나 위치 파악이 어려우면 camera 도구로 시점을 바꿔 확인하세요.
 - 사람처럼 생각하세요: 이미지를 보고, 거리를 눈으로 가늠하고, 적절한 시간만큼 버튼을 누르세요.
 - 작고 점진적인 움직임을 사용하세요. 이동 후 매번 새 스크린샷을 받아 결과를 확인합니다.
-- duration은 버튼을 누르는 시간(초)입니다. 미세 조정은 0.3~0.8, 큰 이동은 1.0~2.5를 사용하세요.
+- 반드시 제공된 도구(tool) 중 하나를 호출하세요. 한 번에 하나의 도구만 호출하세요.
 
 일반적인 전략:
 1. 스크린샷을 보고 바닥의 색깔 공을 찾기
@@ -16,18 +16,7 @@ SYSTEM_PROMPT = """당신은 인형뽑기(크레인 게임)를 플레이하는 A
 5. 집게를 공까지 내리기
 6. 집게 닫아서 공 잡기
 7. 집게 올리기
-8. done 출력
-
-사용 가능한 액션 (JSON 형식으로 응답):
-- {"type": "move", "direction": "<left|right|forward|backward>", "duration": <초>, "reasoning": "<판단 근거>"}
-- {"type": "lower", "duration": <초>, "reasoning": "<판단 근거>"}
-- {"type": "raise", "duration": <초>, "reasoning": "<판단 근거>"}
-- {"type": "grip", "state": "<open|close>", "reasoning": "<판단 근거>"}
-- {"type": "camera", "direction": "<left|right>", "angle": <각도>, "reasoning": "<판단 근거>"}
-- {"type": "wait", "duration": <초>, "reasoning": "<판단 근거>"}
-- {"type": "done", "reasoning": "<판단 근거>"}
-
-반드시 JSON 형식으로만 응답하세요. 한 번에 하나의 액션만 출력하세요."""
+8. done 호출"""
 
 
 def build_step_message(command: str, step: int, max_steps: int, camera_angle: float) -> str:
