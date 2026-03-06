@@ -228,7 +228,7 @@ public class BallSpawner : MonoBehaviour
             if (renderer != null)
             {
                 Color c = ballColors[selectedColorIndex];
-                renderer.material.color = new Color(c.r, c.g, c.b, 0.5f);
+                renderer.material.SetColor("_BaseColor", new Color(c.r, c.g, c.b, 0.5f));
             }
         }
     }
@@ -245,18 +245,17 @@ public class BallSpawner : MonoBehaviour
 
         Color color = GetSelectedColor();
         Renderer renderer = ball.GetComponent<Renderer>();
-        Material mat = new Material(Shader.Find("Standard"));
-        mat.color = isPreview ? new Color(color.r, color.g, color.b, 0.5f) : color;
+        Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        mat.SetColor("_BaseColor", isPreview ? new Color(color.r, color.g, color.b, 0.5f) : color);
 
         if (isPreview)
         {
-            mat.SetFloat("_Mode", 3);
+            mat.SetFloat("_Surface", 1); // Transparent
+            mat.SetFloat("_Blend", 0);   // Alpha
             mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             mat.SetInt("_ZWrite", 0);
-            mat.DisableKeyword("_ALPHATEST_ON");
-            mat.EnableKeyword("_ALPHABLEND_ON");
-            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             mat.renderQueue = 3000;
 
             Destroy(ball.GetComponent<Collider>());
