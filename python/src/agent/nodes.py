@@ -2,9 +2,12 @@ import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
+import copy
+
 from src.agent.state import ClawState
 from src.config import settings
 from src.llm_factory import create_llm
+from src.scene_store import scene_store
 from src.scenes import get_scene
 from src.unity.client import UnitySimClient
 
@@ -21,6 +24,24 @@ def _get_scene(state: ClawState):
     return get_scene(scene_name)
 
 
+def _get_scene_name(state: ClawState) -> str:
+    return state.get("scene_name") or settings.default_scene
+
+
+def _apply_tool_overrides(tools: list, scene_name: str) -> list:
+    """Apply custom tool descriptions from SceneStore."""
+    overrides = scene_store.get_tool_overrides(scene_name)
+    if not overrides:
+        return tools
+    result = []
+    for tool in tools:
+        if tool.name in overrides and "description" in overrides[tool.name]:
+            tool = copy.copy(tool)
+            tool.description = overrides[tool.name]["description"]
+        result.append(tool)
+    return result
+
+
 def observe(state: ClawState) -> dict:
     """Fetch observation from Unity. On first step, reset the episode."""
     if state.get("step", 0) == 0:
@@ -28,6 +49,8 @@ def observe(state: ClawState) -> dict:
         client = _get_client(state)
         obs = client.reset()
         scene = _get_scene(state)
+        scene_name = _get_scene_name(state)
+        prompt = scene_store.get_prompt(scene_name, scene.system_prompt)
         max_steps = state.get("max_steps") or obs.get("max_steps", settings.max_steps)
         return {
             "screenshot_base64": obs["screenshot_base64"],
@@ -35,7 +58,7 @@ def observe(state: ClawState) -> dict:
             "step": obs.get("step", 0),
             "max_steps": max_steps,
             "done": False,
-            "messages": [SystemMessage(content=scene.system_prompt)],
+            "messages": [SystemMessage(content=prompt)],
             "episode_log": [],
         }
     # On subsequent steps, observation was already set by the act node
@@ -45,9 +68,11 @@ def observe(state: ClawState) -> dict:
 def think(state: ClawState) -> dict:
     """Send screenshot + context to LLM with bound tools, extract tool call."""
     scene = _get_scene(state)
+    scene_name = _get_scene_name(state)
 
     llm = create_llm()
-    llm_with_tools = llm.bind_tools(scene.tools)
+    tools = _apply_tool_overrides(scene.tools, scene_name)
+    llm_with_tools = llm.bind_tools(tools)
 
     step_text = scene.build_step_message(
         command=state["command"],

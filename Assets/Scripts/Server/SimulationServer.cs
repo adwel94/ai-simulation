@@ -14,7 +14,8 @@ using Newtonsoft.Json.Linq;
 /// 엔드포인트:
 ///   POST /reset  — 에피소드 초기화, observation 반환
 ///   POST /step   — 액션 실행, 새 observation 반환
-///   GET  /status — 서버 상태 확인
+///   GET  /status  — 서버 상태 확인
+///   GET  /capture — 스크린샷만 캡처
 /// </summary>
 public class SimulationServer : MonoBehaviour
 {
@@ -249,6 +250,9 @@ public class SimulationServer : MonoBehaviour
                 case "/status":
                     HandleStatus(response);
                     break;
+                case "/capture":
+                    HandleCapture(response);
+                    break;
                 case "/reset":
                     if (method == "POST")
                         HandleReset(response);
@@ -291,6 +295,38 @@ public class SimulationServer : MonoBehaviour
             ["port"] = port
         };
         SendJson(response, status);
+    }
+
+    void HandleCapture(HttpListenerResponse response)
+    {
+        if (actionExecutor == null)
+        {
+            SendError(response, 500, "ActionExecutor not available");
+            return;
+        }
+
+        var waitHandle = new ManualResetEventSlim(false);
+        JObject result = null;
+
+        mainThreadQueue.Enqueue(() =>
+        {
+            try
+            {
+                result = actionExecutor.CaptureObservation();
+            }
+            finally
+            {
+                waitHandle.Set();
+            }
+        });
+
+        if (!waitHandle.Wait(10000))
+        {
+            SendError(response, 504, "Capture timed out");
+            return;
+        }
+
+        SendJson(response, result);
     }
 
     void HandleReset(HttpListenerResponse response)

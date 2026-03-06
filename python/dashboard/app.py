@@ -59,5 +59,7 @@ st.markdown(
 - **Run Agent** — Execute agent with real-time monitoring
 - **History** — Browse saved episodes
 - **Batch Collect** — Collect training data at scale
+- **Playground** — Manually control tools and capture screenshots
+- **Scene Editor** — Edit system prompts and tool descriptions
 """
 )

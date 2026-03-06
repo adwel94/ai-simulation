@@ -14,6 +14,12 @@ class UnitySimClient:
         resp.raise_for_status()
         return resp.json()
 
+    def capture(self) -> dict:
+        """GET /capture — capture screenshot without executing any action."""
+        resp = requests.get(f"{self.base_url}/capture", timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
+
     def reset(self) -> dict:
         """POST /reset — start a new episode, returns initial observation."""
         resp = requests.post(f"{self.base_url}/reset", timeout=self.timeout)
