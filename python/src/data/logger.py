@@ -37,12 +37,15 @@ class EpisodeLogger:
                 img_bytes = base64.b64decode(entry["screenshot_base64"])
                 (ep_dir / filename).write_bytes(img_bytes)
 
+            # Support both "actions" (list) and legacy "action" (dict)
+            actions = entry.get("actions") or [entry.get("action", {})]
+
             steps.append(
                 {
                     "step": step_num,
                     "camera_angle": entry.get("camera_angle", 0.0),
                     "screenshot": filename,
-                    "action": entry.get("action", {}),
+                    "actions": actions,
                     "reasoning": entry.get("reasoning", ""),
                 }
             )

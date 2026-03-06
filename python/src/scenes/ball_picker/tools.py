@@ -83,6 +83,17 @@ def wait_action(duration: float, reasoning: str) -> str:
 
 
 @tool
+def memo(content: str) -> str:
+    """관찰 결과, 계획, 진행 상황을 메모합니다. 다른 도구와 함께 호출할 수 있습니다.
+    메모는 매 스텝 표시되므로 현재 상태를 기록하세요.
+
+    Args:
+        content: 메모 내용 (예: "좌우 정렬 완료, 카메라 회전하여 전후 확인 필요")
+    """
+    return content
+
+
+@tool
 def done(reasoning: str) -> str:
     """작업을 완료합니다. 목표를 달성했거나 더 이상 진행할 수 없을 때 호출하세요.
 
@@ -92,7 +103,7 @@ def done(reasoning: str) -> str:
     return "done"
 
 
-ALL_TOOLS = [move, lower, raise_claw, grip, camera, wait_action, done]
+ALL_TOOLS = [move, lower, raise_claw, grip, camera, wait_action, memo, done]
 
 _TOOL_TYPE_MAP = {
     "move": "move",
@@ -101,6 +112,7 @@ _TOOL_TYPE_MAP = {
     "grip": "grip",
     "camera": "camera",
     "wait_action": "wait",
+    "memo": "memo",
     "done": "done",
 }
 

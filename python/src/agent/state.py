@@ -18,8 +18,11 @@ class ClawState(TypedDict, total=False):
     screenshot_base64: str
     camera_angle: float
 
-    # Action decided by LLM
-    action: Optional[dict]
+    # Actions decided by LLM (multiple tool calls per turn)
+    actions: list
+
+    # AI memo (persists across steps, shown in each step message)
+    memo: str
 
     # LLM raw response text (for dashboard display)
     llm_response: str

@@ -98,10 +98,12 @@ def _show_episode_detail(metadata: dict):
         st.markdown(f"**Step {step_data.get('step', step_idx)}**")
         st.markdown(f"Camera angle: {step_data.get('camera_angle', 0):.0f}")
 
-        action = step_data.get("action", {})
-        if action:
-            st.markdown("**Action:**")
-            show_action(action)
+        # Support both "actions" (list) and legacy "action" (dict)
+        actions = step_data.get("actions") or [step_data.get("action", {})]
+        if actions:
+            st.markdown("**Actions:**")
+            for act in actions:
+                show_action(act)
 
     with st.expander("Raw metadata"):
         display_meta = {k: v for k, v in metadata.items() if k != "_dir"}

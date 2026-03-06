@@ -88,7 +88,8 @@ if run_clicked and command.strip():
                 with action_container:
                     action_container.empty()
                     st.markdown("**Current Action:**")
-                    show_action(final_state.get("action", {}))
+                    for act in final_state.get("actions", []):
+                        show_action(act)
 
                 llm_resp = final_state.get("llm_response", "")
                 if llm_resp:
@@ -115,8 +116,9 @@ if run_clicked and command.strip():
         # Episode complete
         progress_bar.progress(1.0)
         is_done = final_state.get("done", False)
-        action_type = final_state.get("action", {}).get("type", "")
-        success = is_done and action_type == "done"
+        last_actions = final_state.get("actions", [])
+        last_action_type = last_actions[-1].get("type", "") if last_actions else ""
+        success = is_done and last_action_type == "done"
 
         if success:
             st.success(

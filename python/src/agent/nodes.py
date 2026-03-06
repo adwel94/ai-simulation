@@ -79,6 +79,7 @@ def think(state: ClawState) -> dict:
         step=state["step"],
         max_steps=state["max_steps"],
         camera_angle=state["camera_angle"],
+        memo=state.get("memo", ""),
     )
 
     user_message = HumanMessage(
@@ -100,11 +101,11 @@ def think(state: ClawState) -> dict:
     logger.info(f"Step {state['step']}: Sending to LLM ({settings.model_name}) with tools...")
     response = llm_with_tools.invoke(messages)
 
-    # Extract tool call from response
+    # Extract tool calls from response (multiple allowed)
     if response.tool_calls:
-        tool_call = response.tool_calls[0]
-        action = scene.tool_call_to_action(tool_call)
-        logger.info(f"Step {state['step']}: Tool call: {tool_call['name']}({tool_call['args']})")
+        actions = [scene.tool_call_to_action(tc) for tc in response.tool_calls]
+        for tc in response.tool_calls:
+            logger.info(f"Step {state['step']}: Tool call: {tc['name']}({tc['args']})")
     else:
         # Fallback: LLM responded with text instead of tool call
         raw_text = response.content
@@ -114,7 +115,7 @@ def think(state: ClawState) -> dict:
                 for part in raw_text
             )
         logger.warning(f"Step {state['step']}: No tool call, raw text: {raw_text[:200]}")
-        action = {"type": "error", "reasoning": f"No tool call: {raw_text[:100]}"}
+        actions = [{"type": "error", "reasoning": f"No tool call: {raw_text[:100]}"}]
 
     # Extract reasoning text from response.content
     reasoning = ""
@@ -130,8 +131,10 @@ def think(state: ClawState) -> dict:
     # Build llm_response string for dashboard display
     llm_response = ""
     if response.tool_calls:
-        tc = response.tool_calls[0]
-        llm_response = f"Tool: {tc['name']}\nArgs: {tc['args']}"
+        parts = []
+        for tc in response.tool_calls:
+            parts.append(f"Tool: {tc['name']}\nArgs: {tc['args']}")
+        llm_response = "\n---\n".join(parts)
     else:
         llm_response = reasoning or ""
 
@@ -139,7 +142,7 @@ def think(state: ClawState) -> dict:
     messages.append(response)
 
     return {
-        "action": action,
+        "actions": actions,
         "llm_response": llm_response,
         "reasoning": reasoning,
         "messages": messages,
@@ -147,18 +150,15 @@ def think(state: ClawState) -> dict:
 
 
 def act(state: ClawState) -> dict:
-    """Execute action in Unity and update observation."""
-    action = state["action"]
-    logger.info(f"Step {state['step']}: Executing {action.get('type', '?')}")
-
+    """Execute actions in Unity sequentially and update observation."""
+    actions = state["actions"]
     client = _get_client(state)
-    obs = client.step(action)
 
     # Log step data
     log_entry = {
         "step": state["step"],
         "camera_angle": state["camera_angle"],
-        "action": action,
+        "actions": actions,
         "reasoning": state.get("reasoning", ""),
         "llm_response": state.get("llm_response", ""),
         "screenshot_base64": state["screenshot_base64"],
@@ -166,27 +166,63 @@ def act(state: ClawState) -> dict:
     episode_log = list(state.get("episode_log", []))
     episode_log.append(log_entry)
 
-    new_step = obs.get("step", state["step"] + 1)
-    is_done = obs.get("done", False) or action.get("type") == "done"
+    # Execute each action sequentially (skip memo actions)
+    obs = None
+    is_done = False
+    memo_text = state.get("memo", "")
+    for i, action in enumerate(actions):
+        if action.get("type") == "memo":
+            memo_text = action.get("content", "")
+            logger.info(f"Step {state['step']}: Memo: {memo_text[:100]}")
+            continue
+        logger.info(f"Step {state['step']}: Executing [{i+1}/{len(actions)}] {action.get('type', '?')}")
+        obs = client.step(action)
+        is_done = obs.get("done", False) or action.get("type") == "done"
+        if is_done:
+            break
 
-    # Add ToolMessage to conversation history so LLM sees the result
+    new_step = obs.get("step", state["step"] + 1) if obs else state["step"] + 1
+
+    # Build action type map for ToolMessage content
+    action_type_by_name = {}
+    for a in actions:
+        # Map tool name back from action type
+        action_type_by_name[a.get("type", "")] = True
+
+    # Add ToolMessage for each tool_call (LangChain requires one per tool_call)
     messages = list(state.get("messages", []))
     last_ai_msg = messages[-1] if messages else None
     if last_ai_msg and hasattr(last_ai_msg, "tool_calls") and last_ai_msg.tool_calls:
-        tool_call_id = last_ai_msg.tool_calls[0].get("id", "")
-        result_text = "액션 실행 완료. 새 스크린샷이 다음 메시지에 첨부됩니다."
-        if is_done:
-            result_text = "에피소드 완료."
-        messages.append(
-            ToolMessage(content=result_text, tool_call_id=tool_call_id)
-        )
+        for tc in last_ai_msg.tool_calls:
+            tool_call_id = tc.get("id", "")
+            tc_name = tc.get("name", "")
+            if tc_name == "memo":
+                result_text = f"메모 저장됨: {tc.get('args', {}).get('content', '')[:100]}"
+            elif is_done:
+                result_text = "에피소드 완료."
+            else:
+                result_text = "액션 실행 완료."
+            messages.append(
+                ToolMessage(content=result_text, tool_call_id=tool_call_id)
+            )
+        # 마지막 ToolMessage에 안내 추가
+        if messages and isinstance(messages[-1], ToolMessage) and not is_done:
+            messages[-1] = ToolMessage(
+                content="모든 액션 실행 완료. 새 스크린샷이 다음 메시지에 첨부됩니다.",
+                tool_call_id=messages[-1].tool_call_id,
+            )
+
+    # done_reason: 마지막 실행된 액션의 reasoning
+    last_action = actions[-1] if actions else {}
+    done_reason = last_action.get("reasoning", "") if is_done else ""
 
     return {
-        "screenshot_base64": obs.get("screenshot_base64", ""),
-        "camera_angle": obs.get("camera_angle", state["camera_angle"]),
+        "screenshot_base64": obs.get("screenshot_base64", "") if obs else state.get("screenshot_base64", ""),
+        "camera_angle": obs.get("camera_angle", state["camera_angle"]) if obs else state["camera_angle"],
         "step": new_step,
         "done": is_done,
-        "done_reason": action.get("reasoning", "") if is_done else "",
+        "done_reason": done_reason,
+        "memo": memo_text,
         "episode_log": episode_log,
         "messages": messages,
     }
