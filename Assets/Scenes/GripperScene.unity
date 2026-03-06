@@ -200,6 +200,7 @@ MonoBehaviour:
   gripperDemo: {fileID: 0}
   pincherController: {fileID: 0}
   screenshotCapture: {fileID: 0}
+  ballSpawner: {fileID: 0}
   maxSteps: 50
   settleDelay: 0.5
 --- !u!1 &59415533
@@ -1072,15 +1073,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallPickGameUI
   gameController: {fileID: 0}
-  agent: {fileID: 0}
-  visionGeminiService: {fileID: 0}
-  screenshotCapture: {fileID: 0}
   controlsPanelPos: {x: 10, y: 160}
   controlsPanelSize: {x: 220, y: 270}
-  aiPanelOffset: {x: 10, y: 10}
-  aiPanelSize: {x: 250, y: 210}
-  debugPanelSize: {x: 320, y: 400}
-  debugPanelBottomMargin: 10
 --- !u!114 &904730668
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1212,8 +1206,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1028258929}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.3007058, y: 0, z: 0, w: 0.95371693}
-  m_LocalPosition: {x: 0, y: 2.4, z: -3}
+  m_LocalRotation: {x: 0.34202015, y: 0, z: 0, w: 0.9396927}
+  m_LocalPosition: {x: 0, y: 3.5, z: -4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1420,6 +1414,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BallSpawner
   ballRadius: 0.05
   ballMass: 0.15
+  autoSpawnOnStart: 1
+  spawnAreaMin: {x: -1.2, y: -1.2}
+  spawnAreaMax: {x: 1.2, y: 1.2}
+  spawnHeight: 0.5
+  minSpacing: 0.3
 --- !u!4 &1346526876
 Transform:
   m_ObjectHideFlags: 0
@@ -1762,7 +1761,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 99dbc984986b8314488108d83295930f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ClawMachineController
-  moveSpeed: 2
+  moveSpeed: 6
   minX: -1.5
   maxX: 1.5
   minZ: -1.5

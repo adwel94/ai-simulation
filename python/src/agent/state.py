@@ -24,6 +24,9 @@ class ClawState(TypedDict, total=False):
     # LLM raw response text (for dashboard display)
     llm_response: str
 
+    # LLM reasoning text (content alongside tool calls)
+    reasoning: str
+
     # Conversation messages (LangChain message objects)
     messages: list
 

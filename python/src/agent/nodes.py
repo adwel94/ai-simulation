@@ -116,20 +116,24 @@ def think(state: ClawState) -> dict:
         logger.warning(f"Step {state['step']}: No tool call, raw text: {raw_text[:200]}")
         action = {"type": "error", "reasoning": f"No tool call: {raw_text[:100]}"}
 
+    # Extract reasoning text from response.content
+    reasoning = ""
+    if response.content:
+        if isinstance(response.content, list):
+            reasoning = "".join(
+                part if isinstance(part, str) else part.get("text", "")
+                for part in response.content
+            )
+        elif isinstance(response.content, str):
+            reasoning = response.content
+
     # Build llm_response string for dashboard display
     llm_response = ""
     if response.tool_calls:
         tc = response.tool_calls[0]
         llm_response = f"Tool: {tc['name']}\nArgs: {tc['args']}"
     else:
-        content = response.content
-        if isinstance(content, list):
-            llm_response = "".join(
-                part if isinstance(part, str) else part.get("text", "")
-                for part in content
-            )
-        else:
-            llm_response = content or ""
+        llm_response = reasoning or ""
 
     # Add AI response to history
     messages.append(response)
@@ -137,6 +141,7 @@ def think(state: ClawState) -> dict:
     return {
         "action": action,
         "llm_response": llm_response,
+        "reasoning": reasoning,
         "messages": messages,
     }
 
@@ -154,6 +159,7 @@ def act(state: ClawState) -> dict:
         "step": state["step"],
         "camera_angle": state["camera_angle"],
         "action": action,
+        "reasoning": state.get("reasoning", ""),
         "llm_response": state.get("llm_response", ""),
         "screenshot_base64": state["screenshot_base64"],
     }

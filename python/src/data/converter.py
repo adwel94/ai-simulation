@@ -49,10 +49,18 @@ def convert_episode_to_sft(episode_dir: Path) -> dict | None:
         messages.append({"role": "user", "content": user_content})
 
         action = step_data.get("action", {})
+        reasoning = step_data.get("reasoning", "")
+        action_json = json.dumps(action, ensure_ascii=False)
+
+        if reasoning:
+            assistant_content = f"<reasoning>\n{reasoning}\n</reasoning>\n{action_json}"
+        else:
+            assistant_content = action_json
+
         messages.append(
             {
                 "role": "assistant",
-                "content": json.dumps(action, ensure_ascii=False),
+                "content": assistant_content,
             }
         )
 

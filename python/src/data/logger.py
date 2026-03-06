@@ -43,6 +43,7 @@ class EpisodeLogger:
                     "camera_angle": entry.get("camera_angle", 0.0),
                     "screenshot": filename,
                     "action": entry.get("action", {}),
+                    "reasoning": entry.get("reasoning", ""),
                 }
             )
 
