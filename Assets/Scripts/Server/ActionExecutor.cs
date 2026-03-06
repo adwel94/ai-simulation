@@ -15,6 +15,7 @@ public class ActionExecutor : MonoBehaviour
     public GripperDemoController gripperDemo;
     public PincherController pincherController;
     public ScreenshotCapture screenshotCapture;
+    public BallSpawner ballSpawner;
 
     [Header("Settings")]
     public int maxSteps = 50;
@@ -48,6 +49,7 @@ public class ActionExecutor : MonoBehaviour
         if (gripperDemo == null) gripperDemo = FindObjectOfType<GripperDemoController>();
         if (pincherController == null) pincherController = FindObjectOfType<PincherController>();
         if (screenshotCapture == null) screenshotCapture = FindObjectOfType<ScreenshotCapture>();
+        if (ballSpawner == null) ballSpawner = FindObjectOfType<BallSpawner>();
     }
 
     void Start()
@@ -114,6 +116,10 @@ public class ActionExecutor : MonoBehaviour
             mainCam.transform.rotation = initialCameraRotation;
             orbitAngle = Mathf.Atan2(initialCameraPosition.x, initialCameraPosition.z) * Mathf.Rad2Deg;
         }
+
+        // 공 재배치
+        if (ballSpawner != null)
+            ballSpawner.SpawnRandomBalls();
 
         // TeleportRoot 후 물리 트랜스폼을 렌더링에 즉시 반영
         Physics.SyncTransforms();

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class BallSpawner : MonoBehaviour
@@ -5,6 +6,17 @@ public class BallSpawner : MonoBehaviour
     [Header("Ball Settings")]
     public float ballRadius = 0.02f;
     public float ballMass = 0.1f;
+
+    [Header("Auto Spawn")]
+    [Tooltip("씬 시작 시 자동으로 공 3개(빨강/파랑/초록) 생성")]
+    public bool autoSpawnOnStart = true;
+    [Tooltip("공 스폰 영역 (Floor 기준)")]
+    public Vector2 spawnAreaMin = new Vector2(-1.2f, -1.2f);
+    public Vector2 spawnAreaMax = new Vector2(1.2f, 1.2f);
+    [Tooltip("공 스폰 높이 (바닥 위)")]
+    public float spawnHeight = 0.5f;
+    [Tooltip("공 간 최소 거리")]
+    public float minSpacing = 0.3f;
 
     // 3 color options
     readonly Color[] ballColors = { Color.red, Color.blue, Color.green };
@@ -15,6 +27,9 @@ public class BallSpawner : MonoBehaviour
     bool guiClicked = false;
     GameObject previewBall;
     Camera mainCamera;
+
+    // Auto-spawned balls tracked for cleanup
+    readonly List<GameObject> spawnedBalls = new List<GameObject>();
 
     Rect buttonRect;
     Rect[] colorButtonRects;
@@ -50,6 +65,9 @@ public class BallSpawner : MonoBehaviour
             colorTextures[i] = MakeTex(2, 2, ballColors[i] * 0.8f);
             selectedColorTextures[i] = MakeTex(2, 2, ballColors[i]);
         }
+
+        if (autoSpawnOnStart)
+            SpawnRandomBalls();
     }
 
     Texture2D MakeTex(int width, int height, Color col)
@@ -231,6 +249,71 @@ public class BallSpawner : MonoBehaviour
                 renderer.material.SetColor("_BaseColor", new Color(c.r, c.g, c.b, 0.5f));
             }
         }
+    }
+
+    /// <summary>
+    /// 기존 자동 생성 공을 모두 제거합니다.
+    /// </summary>
+    public void ClearBalls()
+    {
+        foreach (var ball in spawnedBalls)
+        {
+            if (ball != null) Destroy(ball);
+        }
+        spawnedBalls.Clear();
+    }
+
+    /// <summary>
+    /// 빨강/파랑/초록 공 3개를 랜덤 위치에 생성합니다.
+    /// 기존 자동 생성 공은 제거됩니다.
+    /// </summary>
+    public void SpawnRandomBalls()
+    {
+        ClearBalls();
+
+        List<Vector3> positions = new List<Vector3>();
+
+        for (int i = 0; i < 3; i++)
+        {
+            Vector3 pos = GetRandomSpawnPosition(positions);
+            positions.Add(pos);
+
+            int prevIndex = selectedColorIndex;
+            selectedColorIndex = i;
+            GameObject ball = CreateBallObject(false);
+            ball.transform.position = pos;
+            spawnedBalls.Add(ball);
+            selectedColorIndex = prevIndex;
+
+            Debug.Log($"<color=cyan>[BallSpawner]</color> Auto-spawned {colorNames[i]} ball at {pos}");
+        }
+    }
+
+    Vector3 GetRandomSpawnPosition(List<Vector3> existing)
+    {
+        for (int attempt = 0; attempt < 50; attempt++)
+        {
+            float x = Random.Range(spawnAreaMin.x, spawnAreaMax.x);
+            float z = Random.Range(spawnAreaMin.y, spawnAreaMax.y);
+            Vector3 candidate = new Vector3(x, spawnHeight, z);
+
+            bool tooClose = false;
+            foreach (var p in existing)
+            {
+                if (Vector3.Distance(candidate, p) < minSpacing)
+                {
+                    tooClose = true;
+                    break;
+                }
+            }
+            if (!tooClose) return candidate;
+        }
+        // Fallback
+        return new Vector3(
+            Random.Range(spawnAreaMin.x, spawnAreaMax.x),
+            spawnHeight,
+            Random.Range(spawnAreaMin.y, spawnAreaMax.y)
+        );
     }
 
     Color GetSelectedColor()
