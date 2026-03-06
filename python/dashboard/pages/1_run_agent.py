@@ -45,6 +45,7 @@ if run_clicked and command.strip():
         "done": False,
         "messages": [],
         "episode_log": [],
+        "data_dir": config["data_dir"],
     }
 
     st.info(f"Episode: {episode_id}")
@@ -144,3 +145,19 @@ if run_clicked and command.strip():
 
     except Exception as e:
         st.error(f"Error: {e}")
+        # 에러 발생 시에도 지금까지의 데이터 저장
+        if auto_save and final_state.get("episode_log"):
+            try:
+                ep_logger = EpisodeLogger(
+                    data_dir=str(Path(config["data_dir"]) / "episodes")
+                )
+                ep_dir = ep_logger.save_episode(
+                    episode_id=episode_id,
+                    command=command.strip(),
+                    episode_log=final_state.get("episode_log", []),
+                    success=False,
+                    done_reason=f"error: {e}",
+                )
+                st.caption(f"Saved (with error): {ep_dir}")
+            except Exception:
+                pass

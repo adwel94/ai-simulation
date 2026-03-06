@@ -92,6 +92,7 @@ if start_clicked and commands:
                     "done": False,
                     "messages": [],
                     "episode_log": [],
+                    "data_dir": config["data_dir"],
                 }
             )
 

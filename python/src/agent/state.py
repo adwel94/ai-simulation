@@ -35,3 +35,6 @@ class ClawState(TypedDict, total=False):
 
     # Episode log entries for data collection
     episode_log: list
+
+    # Data directory for saving episodes (set by dashboard)
+    data_dir: str

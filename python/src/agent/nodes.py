@@ -1,11 +1,12 @@
+import copy
 import logging
+from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
-import copy
-
 from src.agent.state import ClawState
 from src.config import settings
+from src.data.logger import EpisodeLogger
 from src.llm_factory import create_llm
 from src.scene_store import scene_store
 from src.scenes import get_scene
@@ -215,6 +216,23 @@ def act(state: ClawState) -> dict:
     # done_reason: 마지막 실행된 액션의 reasoning
     last_action = actions[-1] if actions else {}
     done_reason = last_action.get("reasoning", "") if is_done else ""
+
+    # Per-step incremental save to disk
+    data_dir = state.get("data_dir")
+    if data_dir:
+        try:
+            ep_logger = EpisodeLogger(
+                data_dir=str(Path(data_dir) / "episodes")
+            )
+            ep_logger.save_episode(
+                episode_id=state["episode_id"],
+                command=state["command"],
+                episode_log=episode_log,
+                success=is_done and last_action.get("type") == "done",
+                done_reason=done_reason,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to save episode incrementally: {e}")
 
     return {
         "screenshot_base64": obs.get("screenshot_base64", "") if obs else state.get("screenshot_base64", ""),
