@@ -2,10 +2,10 @@ import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
-from src.agent.prompts import SYSTEM_PROMPT, build_step_message
 from src.agent.state import ClawState
-from src.agent.tools import ALL_TOOLS, tool_call_to_action
 from src.config import settings
+from src.llm_factory import create_llm
+from src.scenes import get_scene
 from src.unity.client import UnitySimClient
 
 logger = logging.getLogger(__name__)
@@ -16,12 +16,18 @@ def _get_client(state: ClawState) -> UnitySimClient:
     return UnitySimClient(base_url=url)
 
 
+def _get_scene(state: ClawState):
+    scene_name = state.get("scene_name") or settings.default_scene
+    return get_scene(scene_name)
+
+
 def observe(state: ClawState) -> dict:
     """Fetch observation from Unity. On first step, reset the episode."""
     if state.get("step", 0) == 0:
         logger.info("Resetting episode...")
         client = _get_client(state)
         obs = client.reset()
+        scene = _get_scene(state)
         max_steps = state.get("max_steps") or obs.get("max_steps", settings.max_steps)
         return {
             "screenshot_base64": obs["screenshot_base64"],
@@ -29,7 +35,7 @@ def observe(state: ClawState) -> dict:
             "step": obs.get("step", 0),
             "max_steps": max_steps,
             "done": False,
-            "messages": [SystemMessage(content=SYSTEM_PROMPT)],
+            "messages": [SystemMessage(content=scene.system_prompt)],
             "episode_log": [],
         }
     # On subsequent steps, observation was already set by the act node
@@ -38,19 +44,12 @@ def observe(state: ClawState) -> dict:
 
 def think(state: ClawState) -> dict:
     """Send screenshot + context to LLM with bound tools, extract tool call."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    scene = _get_scene(state)
 
-    api_key = state.get("api_key") or settings.google_api_key
-    model_name = state.get("model_name") or settings.model_name
+    llm = create_llm()
+    llm_with_tools = llm.bind_tools(scene.tools)
 
-    llm = ChatGoogleGenerativeAI(
-        model=model_name,
-        google_api_key=api_key,
-        temperature=1.0,
-    )
-    llm_with_tools = llm.bind_tools(ALL_TOOLS)
-
-    step_text = build_step_message(
+    step_text = scene.build_step_message(
         command=state["command"],
         step=state["step"],
         max_steps=state["max_steps"],
@@ -73,13 +72,13 @@ def think(state: ClawState) -> dict:
     messages = _strip_old_images(state.get("messages", []), keep_last=2)
     messages.append(user_message)
 
-    logger.info(f"Step {state['step']}: Sending to LLM ({model_name}) with tools...")
+    logger.info(f"Step {state['step']}: Sending to LLM ({settings.model_name}) with tools...")
     response = llm_with_tools.invoke(messages)
 
     # Extract tool call from response
     if response.tool_calls:
         tool_call = response.tool_calls[0]
-        action = tool_call_to_action(tool_call)
+        action = scene.tool_call_to_action(tool_call)
         logger.info(f"Step {state['step']}: Tool call: {tool_call['name']}({tool_call['args']})")
     else:
         # Fallback: LLM responded with text instead of tool call
@@ -144,7 +143,7 @@ def act(state: ClawState) -> dict:
     last_ai_msg = messages[-1] if messages else None
     if last_ai_msg and hasattr(last_ai_msg, "tool_calls") and last_ai_msg.tool_calls:
         tool_call_id = last_ai_msg.tool_calls[0].get("id", "")
-        result_text = f"액션 실행 완료. 새 스크린샷이 다음 메시지에 첨부됩니다."
+        result_text = "액션 실행 완료. 새 스크린샷이 다음 메시지에 첨부됩니다."
         if is_done:
             result_text = "에피소드 완료."
         messages.append(

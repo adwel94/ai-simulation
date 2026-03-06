@@ -2,10 +2,9 @@ from typing import TypedDict, Optional
 
 
 class ClawState(TypedDict, total=False):
-    # Settings (passed from dashboard or CLI)
+    # Settings
     unity_url: str
-    api_key: str
-    model_name: str
+    scene_name: str
 
     # Episode
     episode_id: str

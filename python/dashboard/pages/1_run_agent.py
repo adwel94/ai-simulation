@@ -7,42 +7,37 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import streamlit as st
 
-from dashboard.components import setup_sidebar, show_screenshot, show_action
+from dashboard.components import setup_sidebar, show_action
 from src.agent.graph import build_graph
 from src.data.logger import EpisodeLogger
+from src.scenes import get_scene
 
 config = setup_sidebar()
+scene = get_scene(config["scene_name"])
 
-st.title("🤖 에이전트 실행")
+st.title(f"Run Agent — {scene.display_name}")
 
+default_cmd = scene.default_commands[0] if scene.default_commands else ""
 command = st.text_input(
-    "명령어",
-    value=st.session_state.get("last_command", "빨간 공을 집어"),
-    placeholder="예: 빨간 공을 집어",
+    "Command",
+    value=st.session_state.get("last_command", default_cmd),
+    placeholder=default_cmd,
 )
 st.session_state["last_command"] = command
 
 col_run, col_save = st.columns([1, 1])
 with col_run:
-    run_clicked = st.button(
-        "▶️ 실행",
-        use_container_width=True,
-        disabled=not config["api_key"],
-    )
+    run_clicked = st.button("Run", use_container_width=True)
 with col_save:
-    auto_save = st.checkbox("에피소드 자동 저장", value=True)
+    auto_save = st.checkbox("Auto-save episode", value=True)
 
-if not config["api_key"]:
-    st.warning("사이드바에서 Google API Key를 설정하세요.")
-
-if run_clicked and config["api_key"] and command.strip():
+if run_clicked and command.strip():
     graph = build_graph()
     episode_id = EpisodeLogger.generate_episode_id()
 
     initial_state = {
         "unity_url": config["unity_url"],
-        "api_key": config["api_key"],
-        "model_name": config["model_name"],
+        "scene_name": config["scene_name"],
         "episode_id": episode_id,
         "command": command.strip(),
         "step": 0,
@@ -52,14 +47,14 @@ if run_clicked and config["api_key"] and command.strip():
         "episode_log": [],
     }
 
-    st.info(f"에피소드 시작: {episode_id}")
+    st.info(f"Episode: {episode_id}")
 
     progress_bar = st.progress(0)
     status_text = st.empty()
     img_col, info_col = st.columns([1, 1])
     image_placeholder = img_col.empty()
     action_container = info_col.container()
-    log_expander = st.expander("LLM 응답 로그", expanded=False)
+    log_expander = st.expander("LLM Response Log", expanded=False)
     log_area = log_expander.empty()
 
     accumulated_logs = []
@@ -73,13 +68,12 @@ if run_clicked and config["api_key"] and command.strip():
             if not node_output:
                 continue
 
-            # Merge into running state
             final_state = {**final_state, **node_output}
 
             if node_name == "observe":
                 step = final_state.get("step", 0)
                 max_s = final_state.get("max_steps", config["max_steps"])
-                status_text.markdown(f"**스텝 {step}/{max_s}** — 관찰 중...")
+                status_text.markdown(f"**Step {step}/{max_s}** — Observing...")
                 if final_state.get("screenshot_base64"):
                     image_placeholder.image(
                         __import__("base64").b64decode(final_state["screenshot_base64"]),
@@ -89,11 +83,11 @@ if run_clicked and config["api_key"] and command.strip():
 
             elif node_name == "think":
                 status_text.markdown(
-                    f"**스텝 {final_state.get('step', 0)}/{final_state.get('max_steps', 0)}** — LLM 응답 수신"
+                    f"**Step {final_state.get('step', 0)}/{final_state.get('max_steps', 0)}** — LLM response"
                 )
                 with action_container:
                     action_container.empty()
-                    st.markdown("**현재 액션:**")
+                    st.markdown("**Current Action:**")
                     show_action(final_state.get("action", {}))
 
                 llm_resp = final_state.get("llm_response", "")
@@ -109,14 +103,12 @@ if run_clicked and config["api_key"] and command.strip():
                 progress = min(step / max_s, 1.0) if max_s > 0 else 0
                 progress_bar.progress(progress)
 
-                status_text.markdown(
-                    f"**스텝 {step}/{max_s}** — 액션 실행 완료"
-                )
+                status_text.markdown(f"**Step {step}/{max_s}** — Action executed")
 
                 if final_state.get("screenshot_base64"):
                     image_placeholder.image(
                         __import__("base64").b64decode(final_state["screenshot_base64"]),
-                        caption=f"Step {step} (실행 후)",
+                        caption=f"Step {step} (after)",
                         width=450,
                     )
 
@@ -128,14 +120,13 @@ if run_clicked and config["api_key"] and command.strip():
 
         if success:
             st.success(
-                f"✅ 에피소드 완료! ({final_state.get('step', 0)} 스텝) — "
+                f"Episode complete! ({final_state.get('step', 0)} steps) — "
                 f"{final_state.get('done_reason', '')}"
             )
         else:
-            reason = "최대 스텝 도달" if not is_done else final_state.get("done_reason", "")
-            st.warning(f"⚠️ 에피소드 종료 ({final_state.get('step', 0)} 스텝) — {reason}")
+            reason = "Max steps reached" if not is_done else final_state.get("done_reason", "")
+            st.warning(f"Episode ended ({final_state.get('step', 0)} steps) — {reason}")
 
-        # Auto-save
         if auto_save:
             ep_logger = EpisodeLogger(
                 data_dir=str(Path(config["data_dir"]) / "episodes")
@@ -147,7 +138,7 @@ if run_clicked and config["api_key"] and command.strip():
                 success=success,
                 done_reason=final_state.get("done_reason", ""),
             )
-            st.caption(f"💾 저장됨: {ep_dir}")
+            st.caption(f"Saved: {ep_dir}")
 
     except Exception as e:
-        st.error(f"에러 발생: {e}")
+        st.error(f"Error: {e}")

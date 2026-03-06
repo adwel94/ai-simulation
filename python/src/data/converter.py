@@ -1,7 +1,8 @@
 import json
 from pathlib import Path
 
-from src.agent.prompts import SYSTEM_PROMPT
+from src.config import settings
+from src.scenes import get_scene
 
 
 def convert_episode_to_sft(episode_dir: Path) -> dict | None:
@@ -21,7 +22,9 @@ def convert_episode_to_sft(episode_dir: Path) -> dict | None:
     command = metadata["command"]
     steps = metadata["steps"]
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    scene_name = metadata.get("scene_name", settings.default_scene)
+    scene = get_scene(scene_name)
+    messages = [{"role": "system", "content": scene.system_prompt}]
 
     for i, step_data in enumerate(steps):
         screenshot_path = episode_dir / step_data["screenshot"]

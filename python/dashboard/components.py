@@ -10,6 +10,7 @@ import streamlit as st
 from PIL import Image
 
 from src.config import settings
+from src.scenes import list_scenes, get_scene
 
 
 def show_screenshot(b64: str, caption: str = "", width: int = 400):
@@ -23,51 +24,32 @@ def show_screenshot(b64: str, caption: str = "", width: int = 400):
 
 
 def show_action(action: dict):
-    """Render an action info card."""
+    """Render an action info card (generic, works with any scene)."""
     if not action:
         return
     action_type = action.get("type", "?")
     reasoning = action.get("reasoning", "")
 
-    color_map = {
-        "move": "blue",
-        "lower": "orange",
-        "raise": "green",
-        "grip": "red",
-        "camera": "violet",
-        "wait": "gray",
-        "done": "green",
-        "error": "red",
-    }
-    color = color_map.get(action_type, "gray")
-
     cols = st.columns([1, 3])
     with cols[0]:
-        st.markdown(f":{color}[**{action_type.upper()}**]")
+        st.markdown(f"**{action_type.upper()}**")
     with cols[1]:
-        details = []
-        if action.get("direction"):
-            details.append(f"방향: {action['direction']}")
-        if action.get("duration"):
-            details.append(f"시간: {action['duration']}초")
-        if action.get("state"):
-            details.append(f"상태: {action['state']}")
-        if action.get("angle"):
-            details.append(f"각도: {action['angle']}도")
-        st.text(" | ".join(details) if details else "-")
+        details = {k: v for k, v in action.items() if k not in ("type", "reasoning")}
+        st.text(" | ".join(f"{k}: {v}" for k, v in details.items()) if details else "-")
 
     if reasoning:
-        st.caption(f"💭 {reasoning}")
+        st.caption(f"Reasoning: {reasoning}")
 
 
 def show_episode_summary(metadata: dict):
     """Render an episode summary card."""
     success = metadata.get("success", False)
-    status = "✅ 성공" if success else "❌ 실패"
+    status = "SUCCESS" if success else "FAIL"
+    icon = "O" if success else "X"
     st.markdown(
-        f"**{metadata.get('episode_id', '?')}** — {status} "
-        f"| 스텝: {metadata.get('total_steps', 0)} "
-        f"| 명령: {metadata.get('command', '?')}"
+        f"**{metadata.get('episode_id', '?')}** — {icon} {status} "
+        f"| Steps: {metadata.get('total_steps', 0)} "
+        f"| Command: {metadata.get('command', '?')}"
     )
 
 
@@ -103,42 +85,42 @@ def get_unity_status(url: str) -> dict | None:
 def setup_sidebar() -> dict:
     """Render sidebar settings and return config dict."""
     with st.sidebar:
-        st.header("⚙️ 설정")
+        st.header("Settings")
 
+        # Scene selection
+        scenes = list_scenes()
+        default_idx = scenes.index(settings.default_scene) if settings.default_scene in scenes else 0
+        scene_name = st.selectbox(
+            "Scene",
+            options=scenes,
+            index=default_idx,
+            format_func=lambda s: get_scene(s).display_name,
+            key="scene_select",
+        )
+        st.session_state["scene_name"] = scene_name
+
+        st.divider()
+
+        # Unity connection
         unity_url = st.text_input(
-            "Unity 서버 URL",
+            "Unity Server URL",
             value=st.session_state.get("unity_url", settings.unity_server_url),
             key="unity_url_input",
         )
         st.session_state["unity_url"] = unity_url
 
-        # Connection test
-        if st.button("연결 테스트", use_container_width=True):
+        if st.button("Test Connection", use_container_width=True):
             status = get_unity_status(unity_url)
             if status:
-                st.success("Unity 서버 연결됨!")
+                st.success("Connected!")
             else:
-                st.error("연결 실패")
+                st.error("Connection failed")
 
         st.divider()
 
-        api_key = st.text_input(
-            "Google API Key",
-            type="password",
-            value=st.session_state.get("api_key", settings.google_api_key),
-            key="api_key_input",
-        )
-        st.session_state["api_key"] = api_key
-
-        model_name = st.text_input(
-            "모델명",
-            value=st.session_state.get("model_name", settings.model_name),
-            key="model_name_input",
-        )
-        st.session_state["model_name"] = model_name
-
+        # Operational settings
         max_steps = st.number_input(
-            "최대 스텝",
+            "Max Steps",
             min_value=5,
             max_value=200,
             value=st.session_state.get("max_steps", settings.max_steps),
@@ -147,16 +129,20 @@ def setup_sidebar() -> dict:
         st.session_state["max_steps"] = max_steps
 
         data_dir = st.text_input(
-            "데이터 디렉토리",
+            "Data Directory",
             value=st.session_state.get("data_dir", settings.data_dir),
             key="data_dir_input",
         )
         st.session_state["data_dir"] = data_dir
 
+        # LLM info (read-only)
+        st.divider()
+        st.caption(f"LLM Provider: {settings.llm_provider}")
+        st.caption(f"Model: {settings.model_name}")
+
     return {
         "unity_url": unity_url,
-        "api_key": api_key,
-        "model_name": model_name,
+        "scene_name": scene_name,
         "max_steps": max_steps,
         "data_dir": data_dir,
     }

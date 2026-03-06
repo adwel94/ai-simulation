@@ -1,9 +1,4 @@
-"""LangChain tool definitions for claw machine actions.
-
-Each tool represents an action the agent can take in the Unity simulation.
-Tools are bound to the LLM via bind_tools() so the model uses
-structured tool calling instead of raw JSON output.
-"""
+"""LangChain tool definitions for Ball Picker scene."""
 
 from typing import Literal
 
@@ -99,7 +94,6 @@ def done(reasoning: str) -> str:
 
 ALL_TOOLS = [move, lower, raise_claw, grip, camera, wait_action, done]
 
-# Tool name -> Unity action type mapping
 _TOOL_TYPE_MAP = {
     "move": "move",
     "lower": "lower",
@@ -112,14 +106,7 @@ _TOOL_TYPE_MAP = {
 
 
 def tool_call_to_action(tool_call: dict) -> dict:
-    """Convert a LangChain tool_call dict to a Unity action dict.
-
-    Args:
-        tool_call: {"name": "move", "args": {"direction": "left", "duration": 0.5, "reasoning": "..."}, "id": "..."}
-
-    Returns:
-        {"type": "move", "direction": "left", "duration": 0.5, "reasoning": "..."}
-    """
+    """Convert a LangChain tool_call dict to a Unity action dict."""
     name = tool_call["name"]
     args = dict(tool_call.get("args", {}))
     action_type = _TOOL_TYPE_MAP.get(name, name)

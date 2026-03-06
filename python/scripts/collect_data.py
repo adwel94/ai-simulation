@@ -12,21 +12,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.agent.graph import build_graph
 from src.config import settings
 from src.data.logger import EpisodeLogger
-
-DEFAULT_COMMANDS = [
-    "빨간 공을 집어",
-    "파란 공을 집어",
-    "초록색 공을 집어",
-    "노란 공을 집어",
-    "아무 공이나 집어",
-    "가장 가까운 공을 집어",
-]
+from src.scenes import get_scene
 
 
 def main():
     parser = argparse.ArgumentParser(description="Collect training data")
     parser.add_argument(
         "--episodes", "-n", type=int, default=10, help="Number of episodes"
+    )
+    parser.add_argument(
+        "--scene", "-s", default=None, help="Scene name (default from .env)"
     )
     parser.add_argument(
         "--delay", type=float, default=2.0, help="Delay between episodes (seconds)"
@@ -39,12 +34,18 @@ def main():
     )
     logger = logging.getLogger("collect_data")
 
+    scene_name = args.scene or settings.default_scene
+    scene = get_scene(scene_name)
+    commands = scene.default_commands
+
+    logger.info(f"Scene: {scene.display_name}, Commands: {len(commands)}")
+
     graph = build_graph()
     ep_logger = EpisodeLogger(data_dir=str(Path(settings.data_dir) / "episodes"))
 
     successes = 0
     for i in range(args.episodes):
-        command = random.choice(DEFAULT_COMMANDS)
+        command = random.choice(commands)
         episode_id = EpisodeLogger.generate_episode_id()
 
         logger.info(f"[{i+1}/{args.episodes}] Episode {episode_id}: {command}")
@@ -52,6 +53,7 @@ def main():
         try:
             result = graph.invoke(
                 {
+                    "scene_name": scene_name,
                     "episode_id": episode_id,
                     "command": command,
                     "step": 0,

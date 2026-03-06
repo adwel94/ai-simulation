@@ -1,7 +1,7 @@
 [project]
-name = "claw-machine-agent"
+name = "ai-simulation"
 version = "0.1.0"
-description = "LangGraph agent for Unity claw machine simulation"
+description = "LangGraph agent for Unity AI simulations"
 requires-python = ">=3.11"
 dependencies = [
     "langchain-core>=0.3",
@@ -14,6 +14,9 @@ dependencies = [
     "python-dotenv>=1.0",
     "streamlit>=1.30",
 ]
+
+[project.optional-dependencies]
+openai = ["langchain-openai>=0.2"]
 
 [project.scripts]
 run-agent = "scripts.run_agent:main"
