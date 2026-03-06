@@ -53,7 +53,7 @@ if run_clicked and command.strip():
     status_text = st.empty()
     img_col, info_col = st.columns([1, 1])
     image_placeholder = img_col.empty()
-    action_container = info_col.container()
+    action_container = info_col.container(height=500)
     log_expander = st.expander("LLM Response Log", expanded=False)
     log_area = log_expander.empty()
 
