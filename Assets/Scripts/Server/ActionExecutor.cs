@@ -37,6 +37,10 @@ public class ActionExecutor : MonoBehaviour
     Vector3 initialCameraPosition;
     Quaternion initialCameraRotation;
 
+    // Cached references for input control
+    BallPickGameInput playerInput;
+    BallPickGameController gameController;
+
     public int CurrentStep => currentStep;
     public int MaxSteps => maxSteps;
     public float OrbitAngle => orbitAngle;
@@ -50,6 +54,8 @@ public class ActionExecutor : MonoBehaviour
         if (pincherController == null) pincherController = FindObjectOfType<PincherController>();
         if (screenshotCapture == null) screenshotCapture = FindObjectOfType<ScreenshotCapture>();
         if (ballSpawner == null) ballSpawner = FindObjectOfType<BallSpawner>();
+        playerInput = FindObjectOfType<BallPickGameInput>();
+        gameController = FindObjectOfType<BallPickGameController>();
     }
 
     void Start()
@@ -76,9 +82,15 @@ public class ActionExecutor : MonoBehaviour
     }
 
     /// <summary>
-    /// Reset episode to initial state. Returns observation JSON.
+    /// Reset episode to initial state asynchronously.
+    /// Waits a frame for physics/rendering to settle before capturing.
     /// </summary>
-    public JObject ResetEpisode()
+    public void ResetEpisodeAsync(Action<JObject> onComplete)
+    {
+        StartCoroutine(ResetEpisodeCoroutine(onComplete));
+    }
+
+    IEnumerator ResetEpisodeCoroutine(Action<JObject> onComplete)
     {
         currentStep = 0;
         episodeActive = true;
@@ -88,6 +100,10 @@ public class ActionExecutor : MonoBehaviour
         clawController.StopAIMovement();
         gripperDemo.moveState = BigHandState.Fixed;
         pincherController.gripState = GripState.Fixed;
+
+        // Disable player input to prevent overriding AI movement
+        if (playerInput != null) playerInput.enabled = false;
+        if (gameController != null) gameController.IsAIControlled = true;
 
         // Reset claw position
         var artBody = clawController.GetComponent<ArticulationBody>();
@@ -121,12 +137,23 @@ public class ActionExecutor : MonoBehaviour
         if (ballSpawner != null)
             ballSpawner.SpawnRandomBalls();
 
-        // TeleportRoot 후 물리 트랜스폼을 렌더링에 즉시 반영
         Physics.SyncTransforms();
+
+        // Wait for Destroy() cleanup + physics/rendering settle
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForEndOfFrame();
 
         Debug.Log("<color=cyan>[ActionExecutor]</color> Episode reset complete");
 
-        return CaptureObservation();
+        try
+        {
+            onComplete?.Invoke(CaptureObservation());
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"<color=red>[ActionExecutor]</color> CaptureObservation failed: {e.Message}");
+            onComplete?.Invoke(new JObject { ["error"] = e.Message });
+        }
     }
 
     /// <summary>
@@ -232,8 +259,23 @@ public class ActionExecutor : MonoBehaviour
         {
             case "left": x = -1; break;
             case "right": x = 1; break;
-            case "forward": z = 1; break;
-            case "backward": z = -1; break;
+            case "forward": z = -1; break;  // 카메라 쪽으로 (화면 아래)
+            case "backward": z = 1; break;  // 카메라 반대쪽 (화면 위)
+        }
+
+        // 카메라 상대 방향 → 월드 좌표 변환
+        Camera cam = screenshotCapture?.targetCamera;
+        if (cam != null)
+        {
+            Vector3 camForward = cam.transform.forward;
+            Vector3 camRight = cam.transform.right;
+            camForward.y = 0; camRight.y = 0;
+            camForward.Normalize(); camRight.Normalize();
+
+            float worldX = camRight.x * x + camForward.x * z;
+            float worldZ = camRight.z * x + camForward.z * z;
+            x = worldX;
+            z = worldZ;
         }
 
         clawController.SetAIMoveDirection(x, z);
@@ -393,5 +435,9 @@ public class ActionExecutor : MonoBehaviour
         clawController.StopAIMovement();
         gripperDemo.moveState = BigHandState.Fixed;
         pincherController.gripState = GripState.Fixed;
+
+        // Re-enable player input
+        if (playerInput != null) playerInput.enabled = true;
+        if (gameController != null) gameController.IsAIControlled = false;
     }
 }

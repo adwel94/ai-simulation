@@ -1761,7 +1761,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 99dbc984986b8314488108d83295930f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ClawMachineController
-  moveSpeed: 6
+  moveSpeed: 4
   minX: -1.5
   maxX: 1.5
   minZ: -1.5

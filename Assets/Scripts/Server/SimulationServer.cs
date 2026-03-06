@@ -343,37 +343,23 @@ public class SimulationServer : MonoBehaviour
             return;
         }
 
-        // Execute on main thread and wait for result
+        // Execute on main thread and wait for result (async with coroutine)
         var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
-        Exception error = null;
 
         mainThreadQueue.Enqueue(() =>
         {
-            try
+            actionExecutor.ResetEpisodeAsync((obs) =>
             {
-                result = actionExecutor.ResetEpisode();
-            }
-            catch (Exception e)
-            {
-                error = e;
-            }
-            finally
-            {
+                result = obs;
                 waitHandle.Set();
-            }
+            });
         });
 
-        // Wait for main thread execution (timeout 30s)
+        // Wait for reset + frame settle (timeout 30s)
         if (!waitHandle.Wait(30000))
         {
             SendError(response, 504, "Reset timed out");
-            return;
-        }
-
-        if (error != null)
-        {
-            SendError(response, 500, $"Reset failed: {error.Message}");
             return;
         }
 

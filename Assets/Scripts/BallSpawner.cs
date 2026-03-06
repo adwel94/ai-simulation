@@ -258,7 +258,11 @@ public class BallSpawner : MonoBehaviour
     {
         foreach (var ball in spawnedBalls)
         {
-            if (ball != null) Destroy(ball);
+            if (ball != null)
+            {
+                ball.SetActive(false); // Hide immediately (Destroy is deferred to end of frame)
+                Destroy(ball);
+            }
         }
         spawnedBalls.Clear();
     }

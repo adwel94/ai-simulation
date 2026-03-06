@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import base64
+import requests
 import streamlit as st
 
 from dashboard.components import setup_sidebar
@@ -37,6 +38,17 @@ def _exec_action(action: dict):
     try:
         obs = client.step(action)
         _update_screenshot(obs)
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 400:
+            # Episode not active — auto-reset and retry
+            try:
+                client.reset()
+                obs = client.step(action)
+                _update_screenshot(obs)
+            except Exception as retry_e:
+                st.error(f"Auto-reset failed: {retry_e}")
+        else:
+            st.error(f"Error: {e}")
     except Exception as e:
         st.error(f"Error: {e}")
 

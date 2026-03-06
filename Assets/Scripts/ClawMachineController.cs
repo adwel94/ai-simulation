@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class ClawMachineController : MonoBehaviour
 {
-    public float moveSpeed = 6.0f;
+    public float moveSpeed = 4.0f;
 
     public float minX = -1.5f;
     public float maxX = 1.5f;
