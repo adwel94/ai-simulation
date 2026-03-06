@@ -115,6 +115,9 @@ public class ActionExecutor : MonoBehaviour
             orbitAngle = Mathf.Atan2(initialCameraPosition.x, initialCameraPosition.z) * Mathf.Rad2Deg;
         }
 
+        // TeleportRoot 후 물리 트랜스폼을 렌더링에 즉시 반영
+        Physics.SyncTransforms();
+
         Debug.Log("<color=cyan>[ActionExecutor]</color> Episode reset complete");
 
         return CaptureObservation();

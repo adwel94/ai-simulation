@@ -1,0 +1,4 @@
+[console_scripts]
+collect-data = scripts.collect_data:main
+convert-dataset = scripts.convert_dataset:main
+run-agent = scripts.run_agent:main

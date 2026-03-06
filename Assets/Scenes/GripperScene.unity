@@ -129,9 +129,6 @@ GameObject:
   m_Component:
   - component: {fileID: 28304939}
   - component: {fileID: 28304938}
-  - component: {fileID: 28304937}
-  - component: {fileID: 28304936}
-  - component: {fileID: 28304940}
   - component: {fileID: 28304942}
   - component: {fileID: 28304941}
   m_Layer: 0
@@ -141,43 +138,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &28304936
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 28304935}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 76922ff82a39b8540acf96405dac7834, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ClawMachineAgent
-  clawController: {fileID: 0}
-  gripperDemo: {fileID: 0}
-  pincherController: {fileID: 0}
-  screenshotCapture: {fileID: 0}
-  visionGeminiService: {fileID: 0}
-  episodeLogger: {fileID: 0}
-  topDownCamera: {fileID: 0}
-  maxIterations: 50
-  settleDelay: 0.5
-  rateLimitWait: 5
-  maxRetries: 3
---- !u!114 &28304937
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 28304935}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 85fe91422f5a232428e8116835f50ab6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VisionGeminiService
-  apiKey: 
-  model: gemini-3.1-pro-preview
 --- !u!114 &28304938
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -209,20 +169,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &28304940
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 28304935}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 98297f6a3c4f3944a81b658d1f3a0771, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EpisodeLogger
-  dataDirectory: TrainingData
-  enableLogging: 1
 --- !u!114 &28304941
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -236,7 +182,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SimulationServer
   port: 8765
-  autoStart: 0
+  autoStart: 1
   actionExecutor: {fileID: 0}
 --- !u!114 &28304942
 MonoBehaviour:
@@ -1105,7 +1051,6 @@ GameObject:
   - component: {fileID: 904730670}
   - component: {fileID: 904730669}
   - component: {fileID: 904730668}
-  - component: {fileID: 904730667}
   - component: {fileID: 904730666}
   m_Layer: 0
   m_Name: BallPickGame
@@ -1136,25 +1081,6 @@ MonoBehaviour:
   aiPanelSize: {x: 250, y: 210}
   debugPanelSize: {x: 320, y: 400}
   debugPanelBottomMargin: 10
---- !u!114 &904730667
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 904730665}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3e2aec6be9f4e2941a68d742009a703b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BallPickAgent
-  gameController: {fileID: 0}
-  screenshotCapture: {fileID: 0}
-  visionGeminiService: {fileID: 0}
-  maxIterations: 50
-  settleDelay: 0.5
-  rateLimitWait: 5
-  maxRetries: 3
 --- !u!114 &904730668
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1460,7 +1386,6 @@ GameObject:
   - component: {fileID: 1346526876}
   - component: {fileID: 1346526875}
   - component: {fileID: 1346526874}
-  - component: {fileID: 1346526877}
   m_Layer: 0
   m_Name: BallSpawner
   m_TagString: Untagged
@@ -1480,9 +1405,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88bd2bfb35ee2d540a1509cc8f5f41b0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ClawMachineUI
-  clawMachineAgent: {fileID: 0}
-  visionGeminiService: {fileID: 0}
-  episodeLogger: {fileID: 0}
   simulationServer: {fileID: 0}
 --- !u!114 &1346526875
 MonoBehaviour:
@@ -1513,20 +1435,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1346526877
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1346526873}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8c494e6abbf35f543830e7ac4f1035d3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ClawMachineDebugUI
-  clawMachineAgent: {fileID: 0}
-  visionGeminiService: {fileID: 0}
 --- !u!1 &1437257077
 GameObject:
   m_ObjectHideFlags: 0

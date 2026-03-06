@@ -94,6 +94,9 @@ public class SimulationServer : MonoBehaviour
     {
         if (isRunning) return;
 
+        // 서버 모드에서는 백그라운드에서도 실행되어야 함
+        Application.runInBackground = true;
+
         try
         {
             httpListener = new HttpListener();
@@ -325,8 +328,8 @@ public class SimulationServer : MonoBehaviour
             }
         });
 
-        // Wait for main thread execution (timeout 10s)
-        if (!waitHandle.Wait(10000))
+        // Wait for main thread execution (timeout 30s)
+        if (!waitHandle.Wait(30000))
         {
             SendError(response, 504, "Reset timed out");
             return;

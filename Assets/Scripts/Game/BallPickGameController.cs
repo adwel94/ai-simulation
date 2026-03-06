@@ -60,11 +60,6 @@ public class BallPickGameController : MonoBehaviour
         var clawUI = FindObjectOfType<ClawMachineUI>();
         if (clawUI != null) clawUI.enabled = false;
 
-        var clawDebugUI = FindObjectOfType<ClawMachineDebugUI>();
-        if (clawDebugUI != null) clawDebugUI.enabled = false;
-
-        var clawAgent = FindObjectOfType<ClawMachineAgent>();
-        if (clawAgent != null) clawAgent.enabled = false;
     }
 
     // ================================================================

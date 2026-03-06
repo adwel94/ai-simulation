@@ -1,0 +1,21 @@
+[project]
+name = "claw-machine-agent"
+version = "0.1.0"
+description = "LangGraph agent for Unity claw machine simulation"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain-core>=0.3",
+    "langchain-google-genai>=2.0",
+    "langgraph>=0.2",
+    "requests>=2.31",
+    "Pillow>=10.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+    "streamlit>=1.30",
+]
+
+[project.scripts]
+run-agent = "scripts.run_agent:main"
+collect-data = "scripts.collect_data:main"
+convert-dataset = "scripts.convert_dataset:main"
