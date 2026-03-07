@@ -11,8 +11,8 @@ public class BallSpawner : MonoBehaviour
     [Tooltip("씬 시작 시 자동으로 공 3개(빨강/파랑/초록) 생성")]
     public bool autoSpawnOnStart = true;
     [Tooltip("공 스폰 영역 (Floor 기준)")]
-    public Vector2 spawnAreaMin = new Vector2(-1.2f, -1.2f);
-    public Vector2 spawnAreaMax = new Vector2(1.2f, 1.2f);
+    public Vector2 spawnAreaMin = new Vector2(-1.5f, -1.5f);
+    public Vector2 spawnAreaMax = new Vector2(1.5f, 1.5f);
     [Tooltip("공 스폰 높이 (바닥 위)")]
     public float spawnHeight = 0.5f;
     [Tooltip("공 간 최소 거리")]

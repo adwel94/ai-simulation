@@ -4,10 +4,10 @@ public class ClawMachineController : MonoBehaviour
 {
     public float moveSpeed = 4.0f;
 
-    public float minX = -1.5f;
-    public float maxX = 1.5f;
-    public float minZ = -1.5f;
-    public float maxZ = 1.5f;
+    public float minX = -2f;
+    public float maxX = 2f;
+    public float minZ = -2f;
+    public float maxZ = 2f;
 
     // AI control
     [HideInInspector] public bool isAIControlled = false;
