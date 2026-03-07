@@ -55,10 +55,8 @@ if run_clicked and command.strip():
     img_col, info_col = st.columns([1, 1])
     image_placeholder = img_col.empty()
     action_container = info_col.container(height=500)
-    log_expander = st.expander("LLM Response Log", expanded=False)
-    log_area = log_expander.empty()
-
-    accumulated_logs = []
+    debug_container = st.container()
+    accumulated_debug = []
     final_state = initial_state
 
     try:
@@ -83,8 +81,9 @@ if run_clicked and command.strip():
                     )
 
             elif node_name == "think":
+                step = final_state.get("step", 0)
                 status_text.markdown(
-                    f"**Step {final_state.get('step', 0)}/{final_state.get('max_steps', 0)}** — LLM response"
+                    f"**Step {step}/{final_state.get('max_steps', 0)}** — LLM response"
                 )
                 with action_container:
                     action_container.empty()
@@ -92,12 +91,19 @@ if run_clicked and command.strip():
                     for act in final_state.get("actions", []):
                         show_action(act)
 
-                llm_resp = final_state.get("llm_response", "")
-                if llm_resp:
-                    accumulated_logs.append(
-                        f"[Step {final_state.get('step', 0)}] {llm_resp}"
-                    )
-                    log_area.code("\n\n".join(accumulated_logs), language="json")
+                accumulated_debug.append({
+                    "step": step,
+                    "debug_log": final_state.get("debug_log", ""),
+                })
+                with debug_container:
+                    debug_container.empty()
+                    for d in accumulated_debug:
+                        is_latest = d is accumulated_debug[-1]
+                        with st.expander(
+                            f"Step {d['step']} — Message Log",
+                            expanded=is_latest,
+                        ):
+                            st.code(d["debug_log"], language=None)
 
             elif node_name == "act":
                 step = final_state.get("step", 0)

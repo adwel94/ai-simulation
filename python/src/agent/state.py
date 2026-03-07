@@ -36,5 +36,8 @@ class ClawState(TypedDict, total=False):
     # Episode log entries for data collection
     episode_log: list
 
+    # Debug log (full message history + LLM response, per step)
+    debug_log: str
+
     # Data directory for saving episodes (set by dashboard)
     data_dir: str

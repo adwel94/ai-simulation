@@ -151,6 +151,11 @@ def think(state: ClawState) -> dict:
     else:
         llm_response = reasoning or ""
 
+    # Build debug log: full message history + LLM response
+    debug_messages = _serialize_messages_for_debug(messages)
+    debug_response = _serialize_messages_for_debug([response])
+    debug_log = f"{debug_messages}\n\n--- LLM RESPONSE ---\n\n{debug_response}"
+
     # Add AI response to history
     messages.append(response)
 
@@ -158,6 +163,7 @@ def think(state: ClawState) -> dict:
         "actions": actions,
         "llm_response": llm_response,
         "reasoning": reasoning,
+        "debug_log": debug_log,
         "messages": messages,
     }
 
@@ -175,6 +181,7 @@ def act(state: ClawState) -> dict:
         "reasoning": state.get("reasoning", ""),
         "llm_response": state.get("llm_response", ""),
         "screenshot_base64": state["screenshot_base64"],
+        "messages": _serialize_messages_for_log(state.get("messages", [])),
     }
     episode_log = list(state.get("episode_log", []))
     episode_log.append(log_entry)
@@ -265,6 +272,48 @@ def check_done(state: ClawState) -> str:
     if state.get("step", 0) >= state.get("max_steps", 50):
         return "end"
     return "continue"
+
+
+def _serialize_messages_for_debug(messages: list) -> str:
+    """Convert LangChain messages to readable debug text (images excluded)."""
+    lines = []
+    for msg in messages:
+        role = msg.__class__.__name__
+        if isinstance(msg.content, list):
+            parts = []
+            for p in msg.content:
+                if isinstance(p, dict) and p.get("type") == "image_url":
+                    parts.append("[IMAGE]")
+                elif isinstance(p, dict):
+                    parts.append(p.get("text", str(p)))
+                else:
+                    parts.append(str(p))
+            text = "\n".join(parts)
+        else:
+            text = str(msg.content)
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            tc_text = "\n".join(f"  → {tc['name']}({tc['args']})" for tc in msg.tool_calls)
+            text += f"\n[tool_calls]\n{tc_text}"
+        lines.append(f"=== {role} ===\n{text}")
+    return "\n\n".join(lines)
+
+
+def _serialize_messages_for_log(messages: list) -> list:
+    """Convert LangChain messages to JSON-serializable list for episode storage."""
+    result = []
+    for msg in messages:
+        entry = {"role": msg.__class__.__name__}
+        if isinstance(msg.content, list):
+            entry["content"] = [
+                "[IMAGE]" if (isinstance(p, dict) and p.get("type") == "image_url") else p
+                for p in msg.content
+            ]
+        else:
+            entry["content"] = msg.content
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            entry["tool_calls"] = [{"name": tc["name"], "args": tc["args"]} for tc in msg.tool_calls]
+        result.append(entry)
+    return result
 
 
 def _strip_old_images(messages: list, keep_last: int = 2) -> list:
