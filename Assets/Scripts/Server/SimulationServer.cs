@@ -202,7 +202,18 @@ public class SimulationServer : MonoBehaviour
                     mainThreadQueue.Enqueue(() => OnClientConnected?.Invoke(ip));
                 }
 
-                ThreadPool.QueueUserWorkItem(_ => HandleRequest(context));
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    try
+                    {
+                        HandleRequest(context);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"<color=red>[SimulationServer]</color> Unhandled request error: {ex}");
+                        try { context.Response.Close(); } catch { }
+                    }
+                });
             }
             catch (HttpListenerException)
             {
@@ -494,11 +505,12 @@ public class SimulationServer : MonoBehaviour
             response.ContentLength64 = buffer.Length;
             response.StatusCode = 200;
             response.OutputStream.Write(buffer, 0, buffer.Length);
-            response.OutputStream.Close();
+            response.Close();
         }
         catch (Exception e)
         {
             Debug.LogWarning($"[SimulationServer] Failed to send response: {e.Message}");
+            try { response.Close(); } catch { }
         }
     }
 
@@ -516,11 +528,12 @@ public class SimulationServer : MonoBehaviour
             response.ContentLength64 = buffer.Length;
             response.StatusCode = statusCode;
             response.OutputStream.Write(buffer, 0, buffer.Length);
-            response.OutputStream.Close();
+            response.Close();
         }
         catch (Exception e)
         {
             Debug.LogWarning($"[SimulationServer] Failed to send error: {e.Message}");
+            try { response.Close(); } catch { }
         }
     }
 }

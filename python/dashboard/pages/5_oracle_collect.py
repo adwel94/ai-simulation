@@ -60,7 +60,9 @@ if start_clicked and commands:
     log_container = st.container()
 
     successes = 0
+    consecutive_errors = 0
     results = []
+    stopped = False
 
     for i in range(num_episodes):
         command = random.choice(commands)
@@ -72,6 +74,8 @@ if start_clicked and commands:
             episode_log, success = run_oracle_episode(
                 client, command, noise_level=noise_level,
             )
+
+            consecutive_errors = 0
 
             if success:
                 successes += 1
@@ -91,7 +95,16 @@ if start_clicked and commands:
             results.append(f"{icon} `{episode_id}` — {command} ({steps} steps)")
 
         except Exception as e:
+            consecutive_errors += 1
             results.append(f"! `{episode_id}` — Error: {e}")
+
+            if consecutive_errors >= 10:
+                results.append("!! 연속 10회 에러 — 수집 중단")
+                stopped = True
+                break
+            elif consecutive_errors >= 5:
+                results.append("! 연속 5회 에러 — 30초 대기 후 재시도...")
+                time.sleep(30)
 
         progress_bar.progress((i + 1) / num_episodes)
 

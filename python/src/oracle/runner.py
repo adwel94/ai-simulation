@@ -1,11 +1,14 @@
 """Oracle runner: execute oracle episodes and collect training data."""
 
+import logging
 import random
 import time
 
 from src.data.logger import EpisodeLogger
 from src.oracle.strategy import compute_next_action, select_target_ball
 from src.unity.client import UnitySimClient
+
+logger = logging.getLogger(__name__)
 
 
 def run_oracle_episode(
@@ -30,25 +33,25 @@ def run_oracle_episode(
     step = 0
 
     while step < max_steps and phase != "finished":
-        # Get fresh world state
-        world = client.world_state()
+        try:
+            world = client.world_state()
 
-        # Compute next action
-        action, next_phase = compute_next_action(world, phase, target_ball, noise_level)
+            action, next_phase = compute_next_action(world, phase, target_ball, noise_level)
 
-        # Log this step (screenshot from current obs)
-        episode_log.append({
-            "step": step,
-            "camera_angle": obs.get("camera_angle", 0.0),
-            "screenshot_base64": obs.get("screenshot_base64", ""),
-            "actions": [action],
-            "reasoning": action.get("reasoning", ""),
-        })
+            episode_log.append({
+                "step": step,
+                "camera_angle": obs.get("camera_angle", 0.0),
+                "screenshot_base64": obs.get("screenshot_base64", ""),
+                "actions": [action],
+                "reasoning": action.get("reasoning", ""),
+            })
 
-        # Execute action
-        obs = client.step(action)
-        phase = next_phase
-        step += 1
+            obs = client.step(action)
+            phase = next_phase
+            step += 1
+        except Exception as e:
+            logger.warning(f"Oracle step {step} failed: {e}")
+            return episode_log, False
 
     success = phase == "finished"
     return episode_log, success
@@ -81,7 +84,7 @@ def collect_oracle_episodes(
         commands = ["빨간 공을 집어줘", "파란 공을 집어줘", "초록 공을 집어줘"]
 
     client = UnitySimClient(base_url=unity_url)
-    logger = EpisodeLogger(data_dir=f"{data_dir}/episodes")
+    ep_logger = EpisodeLogger(data_dir=f"{data_dir}/episodes")
     results = []
 
     for i in range(num_episodes):
@@ -94,7 +97,7 @@ def collect_oracle_episodes(
 
         done_reason = "oracle: 공을 성공적으로 집었습니다" if success else "oracle: 실패"
 
-        logger.save_episode(
+        ep_logger.save_episode(
             episode_id=episode_id,
             command=command,
             episode_log=episode_log,
