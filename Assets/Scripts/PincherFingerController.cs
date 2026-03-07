@@ -5,7 +5,8 @@ using UnityEngine;
 public class PincherFingerController : MonoBehaviour
 {
    
-    public float closedZ; 
+    public float closedZ;
+    public float gripForceLimit = 10f;
 
     Vector3 openPosition;
     ArticulationBody articulation;
@@ -30,6 +31,7 @@ public class PincherFingerController : MonoBehaviour
         var drive = articulation.zDrive;
         drive.lowerLimit = min;
         drive.upperLimit = max;
+        drive.forceLimit = gripForceLimit;
         articulation.zDrive = drive;
     }
 
