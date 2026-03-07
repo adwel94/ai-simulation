@@ -30,6 +30,7 @@ public class BallSpawner : MonoBehaviour
 
     // Auto-spawned balls tracked for cleanup
     readonly List<GameObject> spawnedBalls = new List<GameObject>();
+    public List<GameObject> SpawnedBalls => spawnedBalls;
 
     Rect buttonRect;
     Rect[] colorButtonRects;

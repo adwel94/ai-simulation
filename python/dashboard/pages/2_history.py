@@ -1,6 +1,6 @@
 """Episode history viewer page."""
 
-import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -56,13 +56,17 @@ def _show_episode_detail(metadata: dict):
         st.info("No step data")
         return
 
-    step_idx = st.slider(
-        "Step",
-        0,
-        len(steps) - 1,
-        0,
-        key=f"slider_{metadata.get('episode_id', '')}",
-    )
+    if len(steps) == 1:
+        step_idx = 0
+        st.caption("Step 0 (1 step only)")
+    else:
+        step_idx = st.slider(
+            "Step",
+            0,
+            len(steps) - 1,
+            0,
+            key=f"slider_{metadata.get('episode_id', '')}",
+        )
 
     step_data = steps[step_idx]
 
@@ -94,17 +98,43 @@ def _show_episode_detail(metadata: dict):
 # Episode list
 st.subheader(f"Episodes ({len(filtered)})")
 
+# Batch delete controls
+del_col1, del_col2, del_col3 = st.columns([1, 1, 2])
+with del_col1:
+    select_all = st.checkbox("전체 선택", key="select_all")
+with del_col2:
+    delete_selected = st.button("선택 삭제", type="secondary")
+
+selected_ids = []
+
 for i, ep in enumerate(filtered):
     success = ep.get("success", False)
     icon = "O" if success else "X"
-    label = (
-        f"{icon} **{ep.get('episode_id', '?')}** — "
-        f"{ep.get('command', '?')} | "
-        f"{ep.get('total_steps', 0)} steps"
-    )
+    ep_id = ep.get("episode_id", "?")
     timestamp = ep.get("timestamp", "")
-    if timestamp:
-        label += f" | {timestamp[:19]}"
+    time_str = f" | {timestamp[:19]}" if timestamp else ""
 
-    with st.expander(label):
-        _show_episode_detail(ep)
+    col_check, col_label = st.columns([0.3, 5])
+    with col_check:
+        checked = st.checkbox(
+            "sel", value=select_all, key=f"chk_{ep_id}", label_visibility="collapsed",
+        )
+    with col_label:
+        label = (
+            f"{icon} **{ep_id}** — "
+            f"{ep.get('command', '?')} | "
+            f"{ep.get('total_steps', 0)} steps{time_str}"
+        )
+        with st.expander(label):
+            _show_episode_detail(ep)
+
+    if checked:
+        selected_ids.append(ep)
+
+if delete_selected and selected_ids:
+    for ep in selected_ids:
+        ep_dir = Path(ep.get("_dir", ""))
+        if ep_dir.exists():
+            shutil.rmtree(ep_dir)
+    st.success(f"{len(selected_ids)}개 에피소드 삭제됨")
+    st.rerun()

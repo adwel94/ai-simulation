@@ -253,6 +253,9 @@ public class SimulationServer : MonoBehaviour
                 case "/capture":
                     HandleCapture(response);
                     break;
+                case "/world_state":
+                    HandleWorldState(response);
+                    break;
                 case "/reset":
                     if (method == "POST")
                         HandleReset(response);
@@ -323,6 +326,38 @@ public class SimulationServer : MonoBehaviour
         if (!waitHandle.Wait(10000))
         {
             SendError(response, 504, "Capture timed out");
+            return;
+        }
+
+        SendJson(response, result);
+    }
+
+    void HandleWorldState(HttpListenerResponse response)
+    {
+        if (actionExecutor == null)
+        {
+            SendError(response, 500, "ActionExecutor not available");
+            return;
+        }
+
+        var waitHandle = new ManualResetEventSlim(false);
+        JObject result = null;
+
+        mainThreadQueue.Enqueue(() =>
+        {
+            try
+            {
+                result = actionExecutor.GetWorldState();
+            }
+            finally
+            {
+                waitHandle.Set();
+            }
+        });
+
+        if (!waitHandle.Wait(10000))
+        {
+            SendError(response, 504, "WorldState timed out");
             return;
         }
 

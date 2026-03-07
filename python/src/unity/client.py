@@ -26,6 +26,12 @@ class UnitySimClient:
         resp.raise_for_status()
         return resp.json()
 
+    def world_state(self) -> dict:
+        """GET /world_state — get ball positions, claw position, camera basis vectors."""
+        resp = requests.get(f"{self.base_url}/world_state", timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
+
     def step(self, action: dict) -> dict:
         """POST /step — execute an action, returns new observation.
 

@@ -394,6 +394,65 @@ public class ActionExecutor : MonoBehaviour
     }
 
     /// <summary>
+    /// Get world state with coordinates for oracle agent.
+    /// </summary>
+    public JObject GetWorldState()
+    {
+        var state = new JObject();
+
+        // Claw position
+        Vector3 clawPos = clawController.transform.position;
+        state["claw"] = new JObject
+        {
+            ["x"] = Math.Round(clawPos.x, 4),
+            ["y"] = Math.Round(clawPos.y, 4),
+            ["z"] = Math.Round(clawPos.z, 4)
+        };
+
+        // Camera angle
+        state["camera_angle"] = Math.Round(orbitAngle, 1);
+
+        // Grip state
+        state["grip"] = Math.Round(pincherController.CurrentGrip(), 3);
+
+        // Move speed
+        state["move_speed"] = clawController.moveSpeed;
+
+        // Camera basis vectors (from actual Unity camera transform)
+        Camera cam = screenshotCapture?.targetCamera;
+        if (cam != null)
+        {
+            Vector3 camRight = cam.transform.right;
+            Vector3 camFwd = cam.transform.forward;
+            state["cam_right"] = new JObject { ["x"] = Math.Round(camRight.x, 4), ["z"] = Math.Round(camRight.z, 4) };
+            state["cam_forward"] = new JObject { ["x"] = Math.Round(camFwd.x, 4), ["z"] = Math.Round(camFwd.z, 4) };
+        }
+
+        // Ball positions
+        var balls = new JArray();
+        if (ballSpawner != null)
+        {
+            foreach (var ball in ballSpawner.SpawnedBalls)
+            {
+                if (ball != null)
+                {
+                    Vector3 p = ball.transform.position;
+                    balls.Add(new JObject
+                    {
+                        ["name"] = ball.name,
+                        ["x"] = Math.Round(p.x, 4),
+                        ["y"] = Math.Round(p.y, 4),
+                        ["z"] = Math.Round(p.z, 4)
+                    });
+                }
+            }
+        }
+        state["balls"] = balls;
+
+        return state;
+    }
+
+    /// <summary>
     /// Parse action JSON string into ClawAction.
     /// </summary>
     public static ClawAction ParseActionJson(string jsonText)
