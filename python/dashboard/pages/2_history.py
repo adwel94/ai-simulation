@@ -9,6 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 
 from dashboard.components import setup_sidebar, load_episodes, show_action
+from src.config import settings
+from src.data.converter import convert_all_episodes, push_dataset_to_hub
 
 config = setup_sidebar()
 
@@ -29,6 +31,60 @@ avg_steps = sum(e.get("total_steps", 0) for e in episodes) / total if total > 0 
 col1.metric("Episodes", total)
 col2.metric("Success Rate", f"{success_count/total*100:.0f}%" if total > 0 else "0%")
 col3.metric("Avg Steps", f"{avg_steps:.1f}")
+
+# Dataset export
+with st.expander("Dataset Export"):
+    col_convert, col_upload = st.columns(2)
+
+    with col_convert:
+        convert_clicked = st.button("Convert Dataset", use_container_width=True)
+    with col_upload:
+        upload_clicked = st.button("Upload to HuggingFace", use_container_width=True)
+
+    st.text_input(
+        "HuggingFace Repo ID",
+        value="",
+        placeholder="username/ball-picker-vlm",
+        key="hf_repo_id",
+        help="HuggingFace 데이터셋 repo ID (예: username/ball-picker-vlm)",
+    )
+    if settings.hf_token:
+        st.caption("HF_TOKEN 설정됨")
+    else:
+        st.caption("HF_TOKEN이 .env에 설정되어 있지 않습니다.")
+
+    if convert_clicked:
+        episodes_dir = str(Path(config["data_dir"]) / "episodes")
+        output_dir = str(Path(config["data_dir"]) / "dataset")
+        train_count, val_count = convert_all_episodes(
+            episodes_dir=episodes_dir,
+            output_dir=output_dir,
+        )
+        if train_count + val_count > 0:
+            st.success(f"Converted: train {train_count}, val {val_count} -> {output_dir}/")
+        else:
+            st.warning("No successful episodes to convert.")
+
+    if upload_clicked:
+        hf_repo_id = st.session_state.get("hf_repo_id", "")
+        if not hf_repo_id:
+            st.warning("HuggingFace repo ID를 입력하세요.")
+        elif not settings.hf_token:
+            st.error("HF_TOKEN이 .env에 설정되어 있지 않습니다.")
+        else:
+            with st.spinner("HuggingFace에 업로드 중..."):
+                try:
+                    episodes_dir = str(Path(config["data_dir"]) / "episodes")
+                    train_count, val_count = push_dataset_to_hub(
+                        repo_id=hf_repo_id,
+                        episodes_dir=episodes_dir,
+                    )
+                    if train_count + val_count > 0:
+                        st.success(f"Upload complete: train {train_count}, val {val_count}")
+                    else:
+                        st.warning("No successful episodes to upload.")
+                except Exception as e:
+                    st.error(f"Upload failed: {e}")
 
 st.divider()
 
