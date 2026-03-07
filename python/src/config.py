@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Default scene
     default_scene: str = "ball_picker"
 
+    # HuggingFace
+    hf_token: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 
 from dashboard.components import setup_sidebar
-from src.data.converter import convert_all_episodes
+from src.config import settings
+from src.data.converter import convert_all_episodes, push_dataset_to_hub
 from src.data.logger import EpisodeLogger
 from src.oracle.runner import run_oracle_episode
 from src.scenes import get_scene
@@ -46,7 +47,7 @@ if not commands:
 
 st.divider()
 
-col_start, col_convert = st.columns(2)
+col_start, col_convert, col_upload = st.columns(3)
 
 with col_start:
     start_clicked = st.button(
@@ -57,6 +58,9 @@ with col_start:
 
 with col_convert:
     convert_clicked = st.button("Convert Dataset", use_container_width=True)
+
+with col_upload:
+    upload_clicked = st.button("Upload to HuggingFace", use_container_width=True)
 
 if convert_clicked:
     episodes_dir = str(Path(config["data_dir"]) / "episodes")
@@ -69,6 +73,41 @@ if convert_clicked:
         st.success(f"Converted: train {train_count}, val {val_count} -> {output_dir}/")
     else:
         st.warning("No successful episodes to convert.")
+
+if upload_clicked:
+    hf_repo_id = st.session_state.get("hf_repo_id", "")
+    if not hf_repo_id:
+        st.warning("아래에 HuggingFace repo ID를 입력하세요.")
+    elif not settings.hf_token:
+        st.error("HF_TOKEN이 .env에 설정되어 있지 않습니다.")
+    else:
+        with st.spinner("HuggingFace에 업로드 중..."):
+            try:
+                episodes_dir = str(Path(config["data_dir"]) / "episodes")
+                train_count, val_count = push_dataset_to_hub(
+                    repo_id=hf_repo_id,
+                    episodes_dir=episodes_dir,
+                )
+                if train_count + val_count > 0:
+                    st.success(f"Upload complete: train {train_count}, val {val_count} -> huggingface.co/datasets/{hf_repo_id}")
+                else:
+                    st.warning("No successful episodes to upload.")
+            except Exception as e:
+                st.error(f"Upload failed: {e}")
+
+# HuggingFace settings
+with st.expander("HuggingFace Settings"):
+    st.text_input(
+        "Repo ID",
+        value="",
+        placeholder="username/ball-picker-vlm",
+        key="hf_repo_id",
+        help="HuggingFace 데이터셋 repo ID (예: username/ball-picker-vlm)",
+    )
+    if settings.hf_token:
+        st.success("HF_TOKEN 설정됨")
+    else:
+        st.warning("HF_TOKEN이 .env에 설정되어 있지 않습니다.")
 
 if start_clicked and commands:
     client = UnitySimClient(base_url=config["unity_url"])

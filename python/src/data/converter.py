@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from PIL import Image
+
 from src.config import settings
 from src.scenes import get_scene
 
@@ -107,3 +109,112 @@ def _write_jsonl(path: Path, samples: list):
     with open(path, "w", encoding="utf-8") as f:
         for sample in samples:
             f.write(json.dumps(sample, ensure_ascii=False) + "\n")
+
+
+def build_hf_dataset(
+    episodes_dir: str = "data/episodes",
+    val_ratio: float = 0.1,
+):
+    """Convert all successful episodes to a HuggingFace DatasetDict.
+
+    Each step becomes an independent sample: 1 image -> 1 action.
+    Format is compatible with TRL/Unsloth VLM SFT training.
+
+    Returns DatasetDict with 'train' and 'validation' splits.
+    """
+    from datasets import Dataset, DatasetDict, Features, Sequence, Value
+    from datasets import Image as HFImage
+
+    episodes_path = Path(episodes_dir)
+    scene = get_scene(settings.default_scene)
+
+    samples = []
+    for ep_dir in sorted(episodes_path.iterdir()):
+        if not ep_dir.is_dir():
+            continue
+        metadata_path = ep_dir / "metadata.json"
+        if not metadata_path.exists():
+            continue
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if not metadata.get("success", False):
+            continue
+
+        command = metadata["command"]
+        steps = metadata["steps"]
+        total = metadata["total_steps"]
+
+        for step_data in steps:
+            screenshot_path = ep_dir / step_data["screenshot"]
+            if not screenshot_path.exists():
+                continue
+
+            step_num = step_data["step"]
+            camera_angle = step_data.get("camera_angle", 0)
+
+            actions = step_data.get("actions") or [step_data.get("action", {})]
+            reasoning = step_data.get("reasoning", "")
+            actions_json = json.dumps(actions, ensure_ascii=False)
+
+            if reasoning:
+                assistant_text = f"<reasoning>\n{reasoning}\n</reasoning>\n{actions_json}"
+            else:
+                assistant_text = actions_json
+
+            user_text = (
+                f"[사용자 명령]: {command}\n"
+                f"카메라 각도: {camera_angle:.0f}도\n"
+                f"스텝 {step_num}/{total}. 다음 행동을 결정하세요."
+            )
+
+            messages = [
+                {"role": "system", "content": scene.system_prompt},
+                {"role": "user", "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": user_text},
+                ]},
+                {"role": "assistant", "content": [
+                    {"type": "text", "text": assistant_text},
+                ]},
+            ]
+
+            img = Image.open(screenshot_path).convert("RGB")
+            samples.append({"images": [img], "messages": messages})
+
+    if not samples:
+        return None
+
+    # Split
+    val_count = max(1, int(len(samples) * val_ratio))
+    train_samples = samples[:-val_count]
+    val_samples = samples[-val_count:]
+
+    def _to_dataset(items):
+        return Dataset.from_dict({
+            "images": [s["images"] for s in items],
+            "messages": [s["messages"] for s in items],
+        })
+
+    return DatasetDict({
+        "train": _to_dataset(train_samples),
+        "validation": _to_dataset(val_samples),
+    })
+
+
+def push_dataset_to_hub(
+    repo_id: str,
+    episodes_dir: str = "data/episodes",
+    val_ratio: float = 0.1,
+    token: str | None = None,
+) -> tuple[int, int]:
+    """Build HF dataset from episodes and push to HuggingFace Hub.
+
+    Returns (train_count, val_count).
+    """
+    ds = build_hf_dataset(episodes_dir=episodes_dir, val_ratio=val_ratio)
+    if ds is None:
+        return 0, 0
+
+    hf_token = token or settings.hf_token
+    ds.push_to_hub(repo_id, token=hf_token)
+
+    return len(ds["train"]), len(ds["validation"])
