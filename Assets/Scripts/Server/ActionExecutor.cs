@@ -139,8 +139,8 @@ public class ActionExecutor : MonoBehaviour
 
         Physics.SyncTransforms();
 
-        // Wait for Destroy() cleanup + physics/rendering settle
-        yield return new WaitForFixedUpdate();
+        // Wait for balls to land on the floor before capturing
+        yield return new WaitForSeconds(1.5f);
         yield return new WaitForEndOfFrame();
 
         Debug.Log("<color=cyan>[ActionExecutor]</color> Episode reset complete");
