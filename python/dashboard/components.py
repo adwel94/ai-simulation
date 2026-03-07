@@ -82,8 +82,21 @@ def get_unity_status(url: str) -> dict | None:
         return None
 
 
+def apply_wide_content():
+    """Remove Streamlit's default content width limit."""
+    st.markdown(
+        """
+        <style>
+        .block-container { max-width: 100% !important; padding-left: 2rem; padding-right: 2rem; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def setup_sidebar() -> dict:
     """Render sidebar settings and return config dict."""
+    apply_wide_content()
     with st.sidebar:
         st.header("Settings")
 

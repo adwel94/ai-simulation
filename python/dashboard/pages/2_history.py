@@ -48,25 +48,6 @@ elif status_filter == "Fail":
 if sort_order == "Oldest":
     filtered = list(reversed(filtered))
 
-# Episode list
-st.subheader(f"Episodes ({len(filtered)})")
-
-for i, ep in enumerate(filtered):
-    success = ep.get("success", False)
-    icon = "O" if success else "X"
-    label = (
-        f"{icon} **{ep.get('episode_id', '?')}** — "
-        f"{ep.get('command', '?')} | "
-        f"{ep.get('total_steps', 0)} steps"
-    )
-    timestamp = ep.get("timestamp", "")
-    if timestamp:
-        label += f" | {timestamp[:19]}"
-
-    with st.expander(label):
-        _show_episode_detail(ep)
-
-
 def _show_episode_detail(metadata: dict):
     ep_dir = Path(metadata.get("_dir", ""))
     steps = metadata.get("steps", [])
@@ -108,3 +89,22 @@ def _show_episode_detail(metadata: dict):
     with st.expander("Raw metadata"):
         display_meta = {k: v for k, v in metadata.items() if k != "_dir"}
         st.json(display_meta)
+
+
+# Episode list
+st.subheader(f"Episodes ({len(filtered)})")
+
+for i, ep in enumerate(filtered):
+    success = ep.get("success", False)
+    icon = "O" if success else "X"
+    label = (
+        f"{icon} **{ep.get('episode_id', '?')}** — "
+        f"{ep.get('command', '?')} | "
+        f"{ep.get('total_steps', 0)} steps"
+    )
+    timestamp = ep.get("timestamp", "")
+    if timestamp:
+        label += f" | {timestamp[:19]}"
+
+    with st.expander(label):
+        _show_episode_detail(ep)
