@@ -353,6 +353,14 @@ public class BallSpawner : MonoBehaviour
             Rigidbody rb = ball.AddComponent<Rigidbody>();
             rb.mass = ballMass;
             rb.useGravity = true;
+            rb.linearDamping = 2f;
+            rb.angularDamping = 2f;
+
+            var physicMat = new PhysicsMaterial("BallPhysics");
+            physicMat.staticFriction = 0.8f;
+            physicMat.dynamicFriction = 0.6f;
+            physicMat.frictionCombine = PhysicsMaterialCombine.Maximum;
+            ball.GetComponent<SphereCollider>().material = physicMat;
             ball.name = "Ball_" + colorNames[selectedColorIndex];
         }
 

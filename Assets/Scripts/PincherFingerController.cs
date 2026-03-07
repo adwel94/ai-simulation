@@ -6,7 +6,7 @@ public class PincherFingerController : MonoBehaviour
 {
    
     public float closedZ;
-    public float gripForceLimit = 10f;
+    public float gripForceLimit = 80f;
 
     Vector3 openPosition;
     ArticulationBody articulation;

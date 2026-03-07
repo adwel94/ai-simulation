@@ -330,7 +330,7 @@ public class ActionExecutor : MonoBehaviour
             while (elapsed < 3f)
             {
                 float currentGrip = pincherController.CurrentGrip();
-                if (currentGrip >= 0.19f) break;
+                if (currentGrip >= 0.79f) break;
                 if (Mathf.Abs(currentGrip - lastGrip) < 0.001f)
                     stableFrames++;
                 else
