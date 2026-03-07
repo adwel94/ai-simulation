@@ -108,11 +108,11 @@ with move_cols[4]:
 st.subheader("Vertical")
 vert_cols = st.columns(2)
 with vert_cols[0]:
-    if st.button("Lower", use_container_width=True):
-        _exec_action({"type": "lower", "duration": duration})
+    if st.button("Lower (auto)", use_container_width=True):
+        _exec_action({"type": "lower"})
 with vert_cols[1]:
-    if st.button("Raise", use_container_width=True):
-        _exec_action({"type": "raise", "duration": duration})
+    if st.button("Raise (auto)", use_container_width=True):
+        _exec_action({"type": "raise"})
 
 # Grip controls
 st.subheader("Grip")
@@ -126,7 +126,7 @@ with grip_cols[1]:
 
 # Camera controls
 st.subheader("Camera")
-cam_angle = st.slider("Angle (deg)", 10, 90, 45, 5, key="pg_cam_angle")
+cam_angle = st.slider("Angle (deg)", 10, 90, 90, 5, key="pg_cam_angle")
 cam_cols = st.columns(2)
 with cam_cols[0]:
     if st.button("Rotate Left", use_container_width=True):

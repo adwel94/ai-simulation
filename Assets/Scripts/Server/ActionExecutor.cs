@@ -286,14 +286,24 @@ public class ActionExecutor : MonoBehaviour
     IEnumerator ExecuteLower(ClawAction action)
     {
         gripperDemo.moveState = BigHandState.MovingDown;
-        yield return new WaitForSeconds(Mathf.Clamp(action.duration, 0.1f, 5f));
+        float elapsed = 0f;
+        while (gripperDemo.moveState != BigHandState.Fixed && elapsed < 5f)
+        {
+            elapsed += Time.fixedDeltaTime;
+            yield return new WaitForFixedUpdate();
+        }
         gripperDemo.moveState = BigHandState.Fixed;
     }
 
     IEnumerator ExecuteRaise(ClawAction action)
     {
         gripperDemo.moveState = BigHandState.MovingUp;
-        yield return new WaitForSeconds(Mathf.Clamp(action.duration, 0.1f, 5f));
+        float elapsed = 0f;
+        while (gripperDemo.moveState != BigHandState.Fixed && elapsed < 5f)
+        {
+            elapsed += Time.fixedDeltaTime;
+            yield return new WaitForFixedUpdate();
+        }
         gripperDemo.moveState = BigHandState.Fixed;
     }
 
@@ -320,7 +330,7 @@ public class ActionExecutor : MonoBehaviour
             while (elapsed < 3f)
             {
                 float currentGrip = pincherController.CurrentGrip();
-                if (currentGrip > 0.95f) break;
+                if (currentGrip >= 0.19f) break;
                 if (Mathf.Abs(currentGrip - lastGrip) < 0.001f)
                     stableFrames++;
                 else

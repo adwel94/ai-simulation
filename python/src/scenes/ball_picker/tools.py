@@ -22,25 +22,23 @@ def move(
 
 
 @tool
-def lower(duration: float, reasoning: str) -> str:
-    """집게를 아래로 내립니다.
+def lower(reasoning: str) -> str:
+    """집게를 바닥까지 내립니다. 자동으로 바닥에 도달하면 멈춥니다.
 
     Args:
-        duration: 내리는 시간(초). 미세 조정: 0.3~0.8, 큰 이동: 1.0~2.5
         reasoning: 이 행동을 선택한 이유
     """
-    return f"lower {duration}s"
+    return "lower"
 
 
 @tool
-def raise_claw(duration: float, reasoning: str) -> str:
-    """집게를 위로 올립니다.
+def raise_claw(reasoning: str) -> str:
+    """집게를 원래 위치로 올립니다. 자동으로 초기 높이에 도달하면 멈춥니다.
 
     Args:
-        duration: 올리는 시간(초). 미세 조정: 0.3~0.8, 큰 이동: 1.0~2.5
         reasoning: 이 행동을 선택한 이유
     """
-    return f"raise {duration}s"
+    return "raise"
 
 
 @tool

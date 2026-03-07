@@ -39,9 +39,9 @@ public class BallPickGameUI : MonoBehaviour
         GUILayout.Space(4);
 
         GUILayout.Label("WASD / 방향키 : 좌우/전후 이동");
-        GUILayout.Label("Q : 올리기  /  E : 내리기");
+        GUILayout.Label("Q : 올리기 (자동)  /  E : 내리기 (자동)");
         GUILayout.Label("Z : 집게 열기  /  X : 집게 닫기");
-        GUILayout.Label("[  /  ] : 카메라 회전");
+        GUILayout.Label("[  /  ] : 카메라 90도 회전");
         GUILayout.Label("R : 정지");
 
         GUILayout.Space(8);

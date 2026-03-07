@@ -10,7 +10,7 @@ public class BallPickGameInput : MonoBehaviour
     public BallPickGameController gameController;
 
     [Header("Camera")]
-    public float cameraRotateSpeed = 90f;
+    public float cameraRotateStep = 90f;
 
     void Awake()
     {
@@ -31,11 +31,11 @@ public class BallPickGameInput : MonoBehaviour
         if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) h = 1;
         gameController.SetMoveDirection(new Vector2(h, v));
 
-        // === Vertical movement (Q=raise, E=lower) ===
-        float vertical = 0;
-        if (Input.GetKey(KeyCode.Q)) vertical = 1;
-        if (Input.GetKey(KeyCode.E)) vertical = -1;
-        gameController.SetVerticalDirection(vertical);
+        // === Vertical movement (Q=raise to top, E=lower to bottom) ===
+        if (Input.GetKeyDown(KeyCode.Q))
+            gameController.RaiseClaw();
+        if (Input.GetKeyDown(KeyCode.E))
+            gameController.LowerClaw();
 
         // === Grip (Z=open, X=close) ===
         if (Input.GetKeyDown(KeyCode.Z))
@@ -43,11 +43,11 @@ public class BallPickGameInput : MonoBehaviour
         else if (Input.GetKeyDown(KeyCode.X))
             gameController.SetGrip("close");
 
-        // === Camera rotation ([ = left, ] = right) ===
-        if (Input.GetKey(KeyCode.LeftBracket))
-            gameController.RotateCamera(-cameraRotateSpeed * Time.deltaTime);
-        if (Input.GetKey(KeyCode.RightBracket))
-            gameController.RotateCamera(cameraRotateSpeed * Time.deltaTime);
+        // === Camera rotation ([ = left 90, ] = right 90) ===
+        if (Input.GetKeyDown(KeyCode.LeftBracket))
+            gameController.RotateCamera(-cameraRotateStep);
+        if (Input.GetKeyDown(KeyCode.RightBracket))
+            gameController.RotateCamera(cameraRotateStep);
 
         // === Stop all (R) ===
         if (Input.GetKeyDown(KeyCode.R))

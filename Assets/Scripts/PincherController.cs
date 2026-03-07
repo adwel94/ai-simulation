@@ -71,7 +71,7 @@ public class PincherController : MonoBehaviour
         {
             float gripChange = (float)gripState * gripSpeed * Time.fixedDeltaTime;
             float gripGoal = CurrentGrip() + gripChange;
-            grip = Mathf.Clamp01(gripGoal);
+            grip = Mathf.Clamp(gripGoal, 0f, 0.2f);
         }
     }
 

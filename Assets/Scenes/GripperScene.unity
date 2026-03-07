@@ -1005,7 +1005,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   moveState: 0
-  speed: 2
+  speed: 1
+  lowerLimit: -0.4
 --- !u!1 &840626661
 GameObject:
   m_ObjectHideFlags: 0
@@ -1088,7 +1089,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallPickGameInput
   gameController: {fileID: 0}
-  cameraRotateSpeed: 90
+  cameraRotateStep: 90
 --- !u!114 &904730669
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1412,7 +1413,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a05dd92becc6eb42b8f48afd78511c1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BallSpawner
-  ballRadius: 0.05
+  ballRadius: 0.15
   ballMass: 0.15
   autoSpawnOnStart: 1
   spawnAreaMin: {x: -1.2, y: -1.2}

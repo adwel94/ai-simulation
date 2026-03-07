@@ -21,7 +21,7 @@ SYSTEM_PROMPT = """당신은 인형뽑기(크레인 게임)를 플레이하는 A
 2. 현재 화면에서 좌우(left/right) 차이만 정렬 — forward/backward는 사용하지 마세요
 3. 좌우가 정렬되면 memo에 "1차 좌우 정렬 완료"를 기록하고, camera로 90도 회전
 4. 회전된 화면에서: 이전의 깊이 차이가 이제 좌우로 보임 → left/right로만 정렬
-5. 양쪽 축 정렬 확인 → lower → grip → raise_claw → done
+5. 양쪽 축 정렬 확인 → grip open → lower (자동 바닥) → grip close → raise_claw (자동 복귀) → done
 
 절대 하지 말 것:
 - forward/backward로 이동하지 마세요. 사선 카메라에서 깊이를 정확히 판단할 수 없습니다.

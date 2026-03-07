@@ -96,15 +96,21 @@ public class BallPickGameController : MonoBehaviour
     }
 
     /// <summary>
-    /// Vertical movement: positive=raise, negative=lower, zero=stop.
+    /// Lower claw to bottom automatically (stops at lowerLimit).
     /// </summary>
-    public void SetVerticalDirection(float dir)
+    public void LowerClaw()
     {
         if (gripperDemo == null) return;
+        gripperDemo.moveState = BigHandState.MovingDown;
+    }
 
-        if (dir > 0) gripperDemo.moveState = BigHandState.MovingUp;
-        else if (dir < 0) gripperDemo.moveState = BigHandState.MovingDown;
-        else gripperDemo.moveState = BigHandState.Fixed;
+    /// <summary>
+    /// Raise claw to top automatically (stops at upperLimit).
+    /// </summary>
+    public void RaiseClaw()
+    {
+        if (gripperDemo == null) return;
+        gripperDemo.moveState = BigHandState.MovingUp;
     }
 
     /// <summary>
