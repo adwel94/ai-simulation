@@ -46,3 +46,6 @@ class ClawState(TypedDict, total=False):
     llm_provider: str
     model_name: str
     openai_base_url: str
+
+    # Done verification retry counter
+    done_attempts: int

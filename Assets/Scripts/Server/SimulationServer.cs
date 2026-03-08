@@ -405,6 +405,7 @@ public class SimulationServer : MonoBehaviour
         // Wait for reset + frame settle (timeout 30s)
         if (!waitHandle.Wait(30000))
         {
+            Debug.LogError("<color=red>[SimulationServer]</color> /reset TIMEOUT — main thread queue may be blocked");
             SendError(response, 504, "Reset timed out");
             return;
         }

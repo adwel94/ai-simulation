@@ -29,6 +29,22 @@ def _get_scene_name(state: ClawState) -> str:
     return state.get("scene_name") or settings.default_scene
 
 
+BALL_HELD_Y_THRESHOLD = 0.1
+MAX_DONE_RETRIES = 3
+
+
+def _verify_ball_held(client: UnitySimClient) -> tuple[bool, str]:
+    """world_state로 공이 집혀 올라와 있는지 확인."""
+    try:
+        world = client.world_state()
+        for ball in world.get("balls", []):
+            if ball.get("y", 0) > BALL_HELD_Y_THRESHOLD:
+                return True, ball.get("name", "unknown")
+        return False, ""
+    except Exception:
+        return True, ""  # 오류 시 fail-open (done 허용)
+
+
 def _apply_tool_overrides(tools: list, scene_name: str) -> list:
     """Apply custom tool descriptions from SceneStore."""
     overrides = scene_store.get_tool_overrides(scene_name)
@@ -194,11 +210,31 @@ def act(state: ClawState) -> dict:
     obs = None
     is_done = False
     memo_text = state.get("memo", "")
+    done_attempts = state.get("done_attempts", 0)
+    verification_failed = False
     for i, action in enumerate(actions):
         if action.get("type") == "memo":
             memo_text = action.get("content", "")
             logger.info(f"Step {state['step']}: Memo: {memo_text[:100]}")
             continue
+
+        if action.get("type") == "done":
+            ball_held, ball_name = _verify_ball_held(client)
+            if ball_held or done_attempts >= MAX_DONE_RETRIES:
+                obs = client.step(action)
+                is_done = True
+                if ball_held:
+                    logger.info(f"Step {state['step']}: Done verified - '{ball_name}' held")
+                else:
+                    logger.info(f"Step {state['step']}: Done forced after {done_attempts} retries")
+            else:
+                done_attempts += 1
+                verification_failed = True
+                obs = client.capture()
+                is_done = False
+                logger.info(f"Step {state['step']}: Done REJECTED ({done_attempts}/{MAX_DONE_RETRIES}) - no ball held")
+            break
+
         logger.info(f"Step {state['step']}: Executing [{i+1}/{len(actions)}] {action.get('type', '?')}")
         obs = client.step(action)
         is_done = obs.get("done", False) or action.get("type") == "done"
@@ -222,6 +258,12 @@ def act(state: ClawState) -> dict:
             tc_name = tc.get("name", "")
             if tc_name == "memo":
                 result_text = f"메모 저장됨: {tc.get('args', {}).get('content', '')[:100]}"
+            elif tc_name == "done" and verification_failed:
+                result_text = (
+                    "공을 잡지 못했습니다! 모든 공이 바닥에 있습니다. "
+                    "집게 위치를 다시 확인하고 재시도하세요. "
+                    "grip open → 위치 조정 → lower → grip close → raise_claw 순서로 다시 시도하세요."
+                )
             elif is_done:
                 result_text = "에피소드 완료."
             else:
@@ -263,6 +305,7 @@ def act(state: ClawState) -> dict:
         "step": new_step,
         "done": is_done,
         "done_reason": done_reason,
+        "done_attempts": done_attempts,
         "memo": memo_text,
         "episode_log": episode_log,
         "messages": messages,

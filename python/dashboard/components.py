@@ -28,7 +28,19 @@ def _load_llm_settings() -> dict:
 def _save_llm_settings(provider: str, model_name: str, base_url: str):
     """Save LLM settings to disk for persistence across sessions."""
     _LLM_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    data = {"llm_provider": provider, "model_name": model_name, "openai_base_url": base_url}
+    # Load existing to preserve other provider's model name
+    existing = _load_llm_settings()
+    data = {
+        "llm_provider": provider,
+        "gemini_model": existing.get("gemini_model", settings.model_name),
+        "openai_model": existing.get("openai_model", ""),
+        "openai_base_url": base_url,
+    }
+    # Update current provider's model
+    if provider == "gemini":
+        data["gemini_model"] = model_name
+    else:
+        data["openai_model"] = model_name
     _LLM_SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
@@ -176,7 +188,8 @@ def setup_sidebar() -> dict:
             saved = _load_llm_settings()
             if saved:
                 st.session_state.setdefault("llm_provider", saved.get("llm_provider", settings.llm_provider))
-                st.session_state.setdefault("model_name", saved.get("model_name", settings.model_name))
+                st.session_state.setdefault("gemini_model", saved.get("gemini_model", settings.model_name))
+                st.session_state.setdefault("openai_model", saved.get("openai_model", ""))
                 st.session_state.setdefault("openai_base_url", saved.get("openai_base_url", settings.openai_base_url))
             st.session_state["_llm_loaded"] = True
 
@@ -186,12 +199,15 @@ def setup_sidebar() -> dict:
         llm_provider = st.selectbox("Provider", providers, index=provider_idx, key="llm_provider_select")
         st.session_state["llm_provider"] = llm_provider
 
+        # Provider-specific model name
+        model_key = f"{llm_provider}_model"
+        default_model = settings.model_name if llm_provider == "gemini" else ""
         model_name = st.text_input(
             "Model",
-            value=st.session_state.get("model_name", settings.model_name),
-            key="model_name_input",
+            value=st.session_state.get(model_key, default_model),
+            key=f"{llm_provider}_model_input",
         )
-        st.session_state["model_name"] = model_name
+        st.session_state[model_key] = model_name
 
         openai_base_url = ""
         if llm_provider == "openai":
