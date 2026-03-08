@@ -29,7 +29,9 @@ public class ActionExecutor : MonoBehaviour
     // Episode state
     int currentStep = 0;
     bool episodeActive = false;
-    bool actionInProgress = false;
+    volatile bool actionInProgress = false;
+    float actionStartTime;
+    const float ACTION_TIMEOUT = 25f;
 
     // Initial positions for reset
     Vector3 initialClawPosition;
@@ -56,6 +58,16 @@ public class ActionExecutor : MonoBehaviour
         if (ballSpawner == null) ballSpawner = FindObjectOfType<BallSpawner>();
         playerInput = FindObjectOfType<BallPickGameInput>();
         gameController = FindObjectOfType<BallPickGameController>();
+    }
+
+    void Update()
+    {
+        // Watchdog: actionInProgress가 25초 이상 stuck 시 강제 해제
+        if (actionInProgress && Time.time - actionStartTime > ACTION_TIMEOUT)
+        {
+            Debug.LogError("<color=red>[ActionExecutor]</color> WATCHDOG: actionInProgress stuck for 25s! Force resetting.");
+            actionInProgress = false;
+        }
     }
 
     void Start()
@@ -87,10 +99,35 @@ public class ActionExecutor : MonoBehaviour
     /// </summary>
     public void ResetEpisodeAsync(Action<JObject> onComplete)
     {
-        StartCoroutine(ResetEpisodeCoroutine(onComplete));
+        StartCoroutine(ResetEpisodeCoroutineWrapper(onComplete));
     }
 
-    IEnumerator ResetEpisodeCoroutine(Action<JObject> onComplete)
+    IEnumerator ResetEpisodeCoroutineWrapper(Action<JObject> onComplete)
+    {
+        bool failed = false;
+        yield return SafeCoroutine(ResetEpisodeCoroutine(), () => failed = true);
+
+        if (failed)
+        {
+            Debug.LogError("<color=red>[ActionExecutor]</color> Reset failed, returning error observation");
+            onComplete?.Invoke(new JObject { ["error"] = "Reset coroutine failed" });
+            yield break;
+        }
+
+        Debug.Log("<color=cyan>[ActionExecutor]</color> Episode reset complete");
+
+        try
+        {
+            onComplete?.Invoke(CaptureObservation());
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"<color=red>[ActionExecutor]</color> CaptureObservation failed: {e.Message}");
+            onComplete?.Invoke(new JObject { ["error"] = e.Message });
+        }
+    }
+
+    IEnumerator ResetEpisodeCoroutine()
     {
         currentStep = 0;
         episodeActive = true;
@@ -142,18 +179,6 @@ public class ActionExecutor : MonoBehaviour
         // Wait for balls to land on the floor before capturing
         yield return new WaitForSeconds(1.5f);
         yield return new WaitForEndOfFrame();
-
-        Debug.Log("<color=cyan>[ActionExecutor]</color> Episode reset complete");
-
-        try
-        {
-            onComplete?.Invoke(CaptureObservation());
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"<color=red>[ActionExecutor]</color> CaptureObservation failed: {e.Message}");
-            onComplete?.Invoke(new JObject { ["error"] = e.Message });
-        }
     }
 
     /// <summary>
@@ -168,8 +193,9 @@ public class ActionExecutor : MonoBehaviour
     IEnumerator ExecuteActionCoroutine(ClawAction action, Action<JObject> onComplete)
     {
         actionInProgress = true;
+        actionStartTime = Time.time;
 
-        // Handle terminal actions
+        // Handle terminal actions (no yield return needed, safe from exceptions)
         if (action.type == "done")
         {
             episodeActive = false;
@@ -196,8 +222,17 @@ public class ActionExecutor : MonoBehaviour
             yield break;
         }
 
-        // Execute physical action
-        yield return ExecutePhysicalAction(action);
+        // Execute physical action with exception-safe wrapper
+        bool actionFailed = false;
+        yield return SafeCoroutine(ExecutePhysicalAction(action), () => actionFailed = true);
+
+        if (actionFailed)
+        {
+            Debug.LogError("<color=red>[ActionExecutor]</color> Action execution failed, recovering...");
+            actionInProgress = false;
+            onComplete?.Invoke(CaptureObservation());
+            yield break;
+        }
 
         // Settle delay
         yield return new WaitForSeconds(settleDelay);
@@ -221,6 +256,32 @@ public class ActionExecutor : MonoBehaviour
 
         actionInProgress = false;
         onComplete?.Invoke(observation);
+    }
+
+    /// <summary>
+    /// 코루틴을 예외-안전하게 실행하는 래퍼.
+    /// C#에서 yield return은 try-catch 안에 넣을 수 없으므로,
+    /// MoveNext()를 수동 호출하여 예외를 잡음.
+    /// </summary>
+    IEnumerator SafeCoroutine(IEnumerator coroutine, Action onError)
+    {
+        while (true)
+        {
+            object current;
+            try
+            {
+                if (!coroutine.MoveNext())
+                    yield break;
+                current = coroutine.Current;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"<color=red>[ActionExecutor]</color> Coroutine exception: {e.Message}\n{e.StackTrace}");
+                onError?.Invoke();
+                yield break;
+            }
+            yield return current;
+        }
     }
 
     IEnumerator ExecutePhysicalAction(ClawAction action)

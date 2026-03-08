@@ -306,7 +306,8 @@ public class SimulationServer : MonoBehaviour
             ["camera_angle"] = actionExecutor?.OrbitAngle ?? 0f,
             ["action_in_progress"] = actionExecutor?.ActionInProgress ?? false,
             ["total_requests"] = totalRequests,
-            ["port"] = port
+            ["port"] = port,
+            ["queue_size"] = mainThreadQueue.Count
         };
         SendJson(response, status);
     }
@@ -319,7 +320,7 @@ public class SimulationServer : MonoBehaviour
             return;
         }
 
-        var waitHandle = new ManualResetEventSlim(false);
+        using var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
 
         mainThreadQueue.Enqueue(() =>
@@ -336,6 +337,7 @@ public class SimulationServer : MonoBehaviour
 
         if (!waitHandle.Wait(10000))
         {
+            Debug.LogError("<color=red>[SimulationServer]</color> /capture TIMEOUT — main thread queue may be blocked");
             SendError(response, 504, "Capture timed out");
             return;
         }
@@ -351,7 +353,7 @@ public class SimulationServer : MonoBehaviour
             return;
         }
 
-        var waitHandle = new ManualResetEventSlim(false);
+        using var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
 
         mainThreadQueue.Enqueue(() =>
@@ -368,6 +370,7 @@ public class SimulationServer : MonoBehaviour
 
         if (!waitHandle.Wait(10000))
         {
+            Debug.LogError("<color=red>[SimulationServer]</color> /world_state TIMEOUT — main thread queue may be blocked");
             SendError(response, 504, "WorldState timed out");
             return;
         }
@@ -385,12 +388,13 @@ public class SimulationServer : MonoBehaviour
 
         if (actionExecutor.ActionInProgress)
         {
+            Debug.LogWarning("<color=yellow>[SimulationServer]</color> /reset 409: actionInProgress=true — 이전 액션이 완료되지 않음");
             SendError(response, 409, "Action currently in progress. Wait for completion.");
             return;
         }
 
         // Execute on main thread and wait for result (async with coroutine)
-        var waitHandle = new ManualResetEventSlim(false);
+        using var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
 
         mainThreadQueue.Enqueue(() =>
@@ -430,6 +434,7 @@ public class SimulationServer : MonoBehaviour
 
         if (actionExecutor.ActionInProgress)
         {
+            Debug.LogWarning("<color=yellow>[SimulationServer]</color> /step 409: actionInProgress=true — 이전 액션이 완료되지 않음");
             SendError(response, 409, "Action currently in progress. Wait for completion.");
             return;
         }
@@ -462,9 +467,8 @@ public class SimulationServer : MonoBehaviour
         Debug.Log($"<color=cyan>[SimulationServer]</color> Action: type={action.type}, direction={action.direction}, duration={action.duration}");
 
         // Execute on main thread and wait for result
-        var waitHandle = new ManualResetEventSlim(false);
+        using var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
-        Exception execError = null;
 
         mainThreadQueue.Enqueue(() =>
         {
@@ -478,6 +482,7 @@ public class SimulationServer : MonoBehaviour
         // Wait for action execution (timeout 30s for long actions)
         if (!waitHandle.Wait(30000))
         {
+            Debug.LogError($"<color=red>[SimulationServer]</color> /step TIMEOUT — action={action.type}, actionInProgress={actionExecutor.ActionInProgress}");
             SendError(response, 504, "Action execution timed out");
             return;
         }

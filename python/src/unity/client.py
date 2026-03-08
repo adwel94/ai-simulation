@@ -13,7 +13,7 @@ class UnitySimClient:
         retry = Retry(
             total=3,
             backoff_factor=1,  # 1s -> 2s -> 4s
-            status_forcelist=[502, 503, 504],
+            status_forcelist=[502, 503],
             allowed_methods=["GET", "POST"],
         )
         self._session = requests.Session()
