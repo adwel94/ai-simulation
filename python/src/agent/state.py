@@ -41,3 +41,8 @@ class ClawState(TypedDict, total=False):
 
     # Data directory for saving episodes (set by dashboard)
     data_dir: str
+
+    # LLM settings (override from dashboard)
+    llm_provider: str
+    model_name: str
+    openai_base_url: str

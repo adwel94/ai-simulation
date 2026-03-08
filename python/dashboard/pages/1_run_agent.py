@@ -46,9 +46,17 @@ if run_clicked and command.strip():
         "messages": [],
         "episode_log": [],
         "data_dir": config["data_dir"],
+        "llm_provider": config.get("llm_provider"),
+        "model_name": config.get("model_name"),
+        "openai_base_url": config.get("openai_base_url"),
     }
 
-    st.info(f"Episode: {episode_id}")
+    _provider = config.get("llm_provider", "gemini")
+    _model = config.get("model_name", "")
+    _model_label = f"{_provider} / {_model}"
+    if _provider == "openai" and config.get("openai_base_url"):
+        _model_label += f"  ({config['openai_base_url']})"
+    st.info(f"Episode: {episode_id}  |  Model: {_model_label}")
 
     progress_bar = st.progress(0)
     status_text = st.empty()

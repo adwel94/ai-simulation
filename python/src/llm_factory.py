@@ -5,21 +5,26 @@ from langchain_core.language_models import BaseChatModel
 from src.config import settings
 
 
-def create_llm() -> BaseChatModel:
-    """Create a chat model instance based on the configured provider.
+def create_llm(
+    provider: str | None = None,
+    model_name: str | None = None,
+    base_url: str | None = None,
+) -> BaseChatModel:
+    """Create a chat model instance.
 
-    Reads provider, credentials, and model name from settings (.env).
-    Supports:
-        - "gemini": Google Gemini via langchain-google-genai
-        - "openai": OpenAI-compatible API (also works with vLLM)
+    Args:
+        provider: Override settings.llm_provider ("gemini" or "openai").
+        model_name: Override settings.model_name.
+        base_url: Override settings.openai_base_url (for vLLM etc.).
     """
-    provider = settings.llm_provider
+    provider = provider or settings.llm_provider
+    model = model_name or settings.model_name
 
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         return ChatGoogleGenerativeAI(
-            model=settings.model_name,
+            model=model,
             google_api_key=settings.google_api_key,
             temperature=settings.temperature,
         )
@@ -27,13 +32,15 @@ def create_llm() -> BaseChatModel:
         from langchain_openai import ChatOpenAI
 
         kwargs = {
-            "model": settings.model_name,
+            "model": model,
             "temperature": settings.temperature,
         }
-        if settings.openai_api_key:
-            kwargs["api_key"] = settings.openai_api_key
-        if settings.openai_base_url:
-            kwargs["base_url"] = settings.openai_base_url
+        api_key = settings.openai_api_key or "EMPTY"
+        kwargs["api_key"] = api_key
+
+        url = base_url or settings.openai_base_url
+        if url:
+            kwargs["base_url"] = url
         return ChatOpenAI(**kwargs)
     else:
         raise ValueError(

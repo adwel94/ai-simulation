@@ -71,7 +71,11 @@ def think(state: ClawState) -> dict:
     scene = _get_scene(state)
     scene_name = _get_scene_name(state)
 
-    llm = create_llm()
+    llm = create_llm(
+        provider=state.get("llm_provider"),
+        model_name=state.get("model_name"),
+        base_url=state.get("openai_base_url"),
+    )
     tools = _apply_tool_overrides(scene.tools, scene_name)
     llm_with_tools = llm.bind_tools(tools)
 

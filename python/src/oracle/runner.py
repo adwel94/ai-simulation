@@ -5,7 +5,7 @@ import random
 import time
 
 from src.data.logger import EpisodeLogger
-from src.oracle.strategy import compute_next_action, select_target_ball
+from src.oracle.strategy import compute_next_actions, select_target_ball
 from src.unity.client import UnitySimClient
 
 logger = logging.getLogger(__name__)
@@ -36,17 +36,27 @@ def run_oracle_episode(
         try:
             world = client.world_state()
 
-            action, next_phase = compute_next_action(world, phase, target_ball, noise_level)
+            actions, next_phase = compute_next_actions(
+                world, phase, target_ball, noise_level, step=step,
+            )
 
+            # Log this step
             episode_log.append({
                 "step": step,
                 "camera_angle": obs.get("camera_angle", 0.0),
                 "screenshot_base64": obs.get("screenshot_base64", ""),
-                "actions": [action],
-                "reasoning": action.get("reasoning", ""),
+                "actions": actions,
+                "reasoning": "",
             })
 
-            obs = client.step(action)
+            # Execute actions (skip memo, send rest to Unity)
+            for action in actions:
+                if action.get("type") == "memo":
+                    continue
+                obs = client.step(action)
+                if action.get("type") == "done":
+                    break
+
             phase = next_phase
             step += 1
         except Exception as e:

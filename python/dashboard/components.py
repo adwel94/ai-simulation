@@ -12,6 +12,25 @@ from PIL import Image
 from src.config import settings
 from src.scenes import list_scenes, get_scene
 
+_LLM_SETTINGS_FILE = Path(settings.data_dir) / "llm_settings.json"
+
+
+def _load_llm_settings() -> dict:
+    """Load saved LLM settings from disk."""
+    try:
+        if _LLM_SETTINGS_FILE.exists():
+            return json.loads(_LLM_SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        pass
+    return {}
+
+
+def _save_llm_settings(provider: str, model_name: str, base_url: str):
+    """Save LLM settings to disk for persistence across sessions."""
+    _LLM_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    data = {"llm_provider": provider, "model_name": model_name, "openai_base_url": base_url}
+    _LLM_SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
 
 def show_screenshot(b64: str, caption: str = "", width: int = 400):
     """Render a base64 JPEG screenshot."""
@@ -148,14 +167,51 @@ def setup_sidebar() -> dict:
         )
         st.session_state["data_dir"] = data_dir
 
-        # LLM info (read-only)
+        # LLM settings
         st.divider()
-        st.caption(f"LLM Provider: {settings.llm_provider}")
-        st.caption(f"Model: {settings.model_name}")
+        st.subheader("LLM")
+
+        # Load saved settings (only on first run)
+        if "_llm_loaded" not in st.session_state:
+            saved = _load_llm_settings()
+            if saved:
+                st.session_state.setdefault("llm_provider", saved.get("llm_provider", settings.llm_provider))
+                st.session_state.setdefault("model_name", saved.get("model_name", settings.model_name))
+                st.session_state.setdefault("openai_base_url", saved.get("openai_base_url", settings.openai_base_url))
+            st.session_state["_llm_loaded"] = True
+
+        providers = ["gemini", "openai"]
+        default_provider = st.session_state.get("llm_provider", settings.llm_provider)
+        provider_idx = providers.index(default_provider) if default_provider in providers else 0
+        llm_provider = st.selectbox("Provider", providers, index=provider_idx, key="llm_provider_select")
+        st.session_state["llm_provider"] = llm_provider
+
+        model_name = st.text_input(
+            "Model",
+            value=st.session_state.get("model_name", settings.model_name),
+            key="model_name_input",
+        )
+        st.session_state["model_name"] = model_name
+
+        openai_base_url = ""
+        if llm_provider == "openai":
+            openai_base_url = st.text_input(
+                "Base URL",
+                value=st.session_state.get("openai_base_url", settings.openai_base_url),
+                key="openai_base_url_input",
+                placeholder="https://your-server/v1",
+            )
+            st.session_state["openai_base_url"] = openai_base_url
+
+        # Persist LLM settings to disk
+        _save_llm_settings(llm_provider, model_name, openai_base_url)
 
     return {
         "unity_url": unity_url,
         "scene_name": scene_name,
         "max_steps": max_steps,
         "data_dir": data_dir,
+        "llm_provider": llm_provider,
+        "model_name": model_name,
+        "openai_base_url": openai_base_url,
     }
