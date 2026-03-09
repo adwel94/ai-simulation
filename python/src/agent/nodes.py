@@ -1,5 +1,6 @@
 import copy
 import logging
+import time
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -60,10 +61,11 @@ def _apply_tool_overrides(tools: list, scene_name: str) -> list:
 
 
 def observe(state: ClawState) -> dict:
-    """Fetch observation from Unity. On first step, reset the episode."""
+    """Fetch observation from Unity. step 0: reset+capture, 이후: wait+capture."""
+    client = _get_client(state)
+
     if state.get("step", 0) == 0:
         logger.info("Resetting episode...")
-        client = _get_client(state)
         obs = client.reset()
         scene = _get_scene(state)
         scene_name = _get_scene_name(state)
@@ -79,8 +81,21 @@ def observe(state: ClawState) -> dict:
             "messages": [SystemMessage(content=prompt)],
             "episode_log": [],
         }
-    # On subsequent steps, observation was already set by the act node
-    return {}
+
+    # 이후 스텝: 이전 액션 완료 대기 + 캡처
+    try:
+        client.wait_action_complete()
+        time.sleep(0.2)
+        obs = client.capture()
+    except Exception as e:
+        logger.warning(f"Observe failed: {e}")
+        return {}
+
+    return {
+        "screenshot_base64": obs.get("screenshot_base64", ""),
+        "camera_angle": obs.get("camera_angle", state["camera_angle"]),
+        "grip": obs.get("grip", state.get("grip", 0.0)),
+    }
 
 
 def think(state: ClawState) -> dict:
@@ -117,8 +132,8 @@ def think(state: ClawState) -> dict:
         ]
     )
 
-    # Strip old images from history to save tokens (keep only last 2 images)
-    messages = _strip_old_images(state.get("messages", []), keep_last=2)
+    # 슬라이딩 윈도우: SystemMessage + 최근 3턴만 유지
+    messages = _trim_history(state.get("messages", []), keep_turns=3)
     messages.append(user_message)
 
     logger.info(f"Step {state['step']}: Sending to LLM ({settings.model_name}) with tools...")
@@ -209,7 +224,6 @@ def act(state: ClawState) -> dict:
     episode_log.append(log_entry)
 
     # Execute each action sequentially (skip memo actions)
-    obs = None
     is_done = False
     memo_text = state.get("memo", "")
     done_attempts = state.get("done_attempts", 0)
@@ -223,7 +237,8 @@ def act(state: ClawState) -> dict:
         if action.get("type") == "done":
             ball_held, ball_name = _verify_ball_held(client)
             if ball_held or done_attempts >= MAX_DONE_RETRIES:
-                obs = client.step_and_observe(action)
+                client.step(action)
+                client.wait_action_complete()
                 is_done = True
                 if ball_held:
                     logger.info(f"Step {state['step']}: Done verified - '{ball_name}' held")
@@ -232,18 +247,17 @@ def act(state: ClawState) -> dict:
             else:
                 done_attempts += 1
                 verification_failed = True
-                obs = client.capture()
                 is_done = False
                 logger.info(f"Step {state['step']}: Done REJECTED ({done_attempts}/{MAX_DONE_RETRIES}) - no ball held")
             break
 
         logger.info(f"Step {state['step']}: Executing [{i+1}/{len(actions)}] {action.get('type', '?')}")
-        obs = client.step_and_observe(action)
-        is_done = obs.get("done", False) or action.get("type") == "done"
-        if is_done:
+        try:
+            client.step(action)
+            client.wait_action_complete()
+        except Exception as e:
+            logger.warning(f"Step {state['step']}: Action failed: {e}")
             break
-
-    new_step = obs.get("step", state["step"] + 1) if obs else state["step"] + 1
 
     # Build action type map for ToolMessage content
     action_type_by_name = {}
@@ -302,10 +316,7 @@ def act(state: ClawState) -> dict:
             logger.warning(f"Failed to save episode incrementally: {e}")
 
     return {
-        "screenshot_base64": obs.get("screenshot_base64", "") if obs else state.get("screenshot_base64", ""),
-        "camera_angle": obs.get("camera_angle", state["camera_angle"]) if obs else state["camera_angle"],
-        "grip": obs.get("grip", state.get("grip", 0.0)) if obs else state.get("grip", 0.0),
-        "step": new_step,
+        "step": state["step"] + 1,
         "done": is_done,
         "done_reason": done_reason,
         "done_attempts": done_attempts,
@@ -366,29 +377,28 @@ def _serialize_messages_for_log(messages: list) -> list:
     return result
 
 
-def _strip_old_images(messages: list, keep_last: int = 2) -> list:
-    """Remove images from older messages to save tokens."""
-    result = []
-    images_seen = 0
-    for msg in reversed(messages):
-        if isinstance(msg, HumanMessage) and isinstance(msg.content, list):
-            has_image = any(
-                isinstance(p, dict) and p.get("type") == "image_url"
-                for p in msg.content
-            )
-            if has_image:
-                images_seen += 1
-                if images_seen > keep_last:
-                    new_content = []
-                    for part in msg.content:
-                        if isinstance(part, dict) and part.get("type") == "image_url":
-                            new_content.append(
-                                {"type": "text", "text": "[이전 스크린샷]"}
-                            )
-                        else:
-                            new_content.append(part)
-                    msg = HumanMessage(content=new_content)
-        result.append(msg)
+def _trim_history(messages: list, keep_turns: int = 3) -> list:
+    """SystemMessage 유지 + 최근 N턴만 유지. 1턴 = Human+AI+Tool 묶음."""
+    if not messages:
+        return messages
 
-    result.reverse()
-    return result
+    system_msgs = []
+    rest = []
+    for msg in messages:
+        if isinstance(msg, SystemMessage):
+            system_msgs.append(msg)
+        else:
+            rest.append(msg)
+
+    # HumanMessage 기준으로 턴 경계 찾기
+    turn_starts = []
+    for i, msg in enumerate(rest):
+        if isinstance(msg, HumanMessage):
+            turn_starts.append(i)
+
+    # 최근 keep_turns 턴만 유지
+    if len(turn_starts) > keep_turns:
+        cut_index = turn_starts[-keep_turns]
+        rest = rest[cut_index:]
+
+    return system_msgs + rest
