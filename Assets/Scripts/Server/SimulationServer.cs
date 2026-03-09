@@ -394,13 +394,7 @@ public class SimulationServer : MonoBehaviour
             return;
         }
 
-        if (actionExecutor.ActionInProgress)
-        {
-            Debug.LogWarning("<color=yellow>[SimulationServer]</color> /reset 409: actionInProgress=true — 이전 액션이 완료되지 않음");
-            SendError(response, 409, "Action currently in progress. Wait for completion.");
-            return;
-        }
-
+        // Reset은 모든 상태를 초기화하므로 actionInProgress 무시하고 진행
         // Execute on main thread and wait for result (async with coroutine)
         var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
