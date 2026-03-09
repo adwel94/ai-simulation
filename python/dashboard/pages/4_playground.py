@@ -36,14 +36,14 @@ def _update_screenshot(obs: dict):
 
 def _exec_action(action: dict):
     try:
-        obs = client.step(action)
+        obs = client.step_and_observe(action)
         _update_screenshot(obs)
     except requests.exceptions.HTTPError as e:
         if e.response is not None and e.response.status_code == 400:
             # Episode not active — auto-reset and retry
             try:
                 client.reset()
-                obs = client.step(action)
+                obs = client.step_and_observe(action)
                 _update_screenshot(obs)
             except Exception as retry_e:
                 st.error(f"Auto-reset failed: {retry_e}")

@@ -34,8 +34,6 @@ public class ActionExecutor : MonoBehaviour
     float actionStartTime;
     string currentActionType = "";
     float currentActionDuration;
-    float lastGripValue;
-    int gripStableFrames;
 
     // Initial positions for reset
     Vector3 initialClawPosition;
@@ -52,6 +50,11 @@ public class ActionExecutor : MonoBehaviour
     public float OrbitAngle => orbitAngle;
     public bool EpisodeActive => episodeActive;
     public bool ActionInProgress => actionInProgress;
+
+    /// <summary>
+    /// HTTP 스레드에서 호출. 큐 처리 전 폴링 race condition 방지.
+    /// </summary>
+    public void MarkActionStarted() => actionInProgress = true;
 
     void Awake()
     {
@@ -118,25 +121,19 @@ public class ActionExecutor : MonoBehaviour
 
             case "grip":
                 float currentGrip = pincherController.CurrentGrip();
-                if (elapsed > 3f)
+                bool reachedTarget;
+                if (pincherController.gripState == GripState.Closing)
+                    reachedTarget = currentGrip >= 0.19f;
+                else if (pincherController.gripState == GripState.Opening)
+                    reachedTarget = currentGrip <= 0.01f;
+                else
+                    reachedTarget = true;
+
+                if (reachedTarget || elapsed > 3f)
                 {
                     pincherController.gripState = GripState.Fixed;
                     complete = true;
                 }
-                else if (Mathf.Abs(currentGrip - lastGripValue) < 0.005f)
-                {
-                    gripStableFrames++;
-                    if (gripStableFrames > 15)
-                    {
-                        pincherController.gripState = GripState.Fixed;
-                        complete = true;
-                    }
-                }
-                else
-                {
-                    gripStableFrames = 0;
-                }
-                lastGripValue = currentGrip;
                 break;
 
             case "wait":
@@ -173,8 +170,6 @@ public class ActionExecutor : MonoBehaviour
         actionStartTime = Time.time;
         currentActionType = action.type;
         currentActionDuration = action.duration;
-        lastGripValue = 0f;
-        gripStableFrames = 0;
 
         Debug.Log($"<color=cyan>[ActionExecutor]</color> Action START: {action.type}");
 
@@ -205,7 +200,6 @@ public class ActionExecutor : MonoBehaviour
                     pincherController.ResetGripToOpen();
                 else
                     gameController.SetGrip("close");
-                lastGripValue = pincherController.CurrentGrip();
                 break;
 
             case "camera":

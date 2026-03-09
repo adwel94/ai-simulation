@@ -473,6 +473,10 @@ public class SimulationServer : MonoBehaviour
 
         Debug.Log($"<color=cyan>[SimulationServer]</color> Action: type={action.type}, direction={action.direction}, duration={action.duration}");
 
+        // Race condition 방지: 큐 처리 전에 폴링이 "완료"로 오판하지 않도록
+        // HTTP 스레드에서 먼저 플래그 설정 (volatile이므로 스레드 안전)
+        actionExecutor.MarkActionStarted();
+
         // Fire-and-forget: 메인 스레드에서 즉시 실행, 블로킹 없음
         mainThreadQueue.Enqueue(() =>
         {
