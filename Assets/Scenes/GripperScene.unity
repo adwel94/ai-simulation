@@ -202,7 +202,6 @@ MonoBehaviour:
   screenshotCapture: {fileID: 0}
   ballSpawner: {fileID: 0}
   maxSteps: 50
-  settleDelay: 0.5
 --- !u!1 &59415533
 GameObject:
   m_ObjectHideFlags: 0
@@ -457,7 +456,7 @@ ArticulationBody:
   m_Enabled: 1
   serializedVersion: 6
   m_Mass: 1
-  m_ParentAnchorPosition: {x: -0.52300054, y: 11.505005, z: -1.3914006}
+  m_ParentAnchorPosition: {x: -0.73000044, y: 11.505005, z: -1.3900005}
   m_ParentAnchorRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
   m_AnchorRotation: {x: 0, y: 0, z: 0.70710677, w: 0.70710677}
@@ -547,6 +546,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   closedZ: 11
+  gripForceLimit: 80
 --- !u!1 &480423926
 GameObject:
   m_ObjectHideFlags: 0
@@ -674,7 +674,7 @@ ArticulationBody:
   m_Enabled: 1
   serializedVersion: 6
   m_Mass: 1
-  m_ParentAnchorPosition: {x: 0.52300054, y: 11.505005, z: 1.3914006}
+  m_ParentAnchorPosition: {x: 0.8100004, y: 11.505005, z: 1.3900005}
   m_ParentAnchorRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
   m_AnchorRotation: {x: 0, y: 0, z: 0.70710677, w: 0.70710677}
@@ -764,6 +764,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   closedZ: -11
+  gripForceLimit: 80
 --- !u!1 &811239234
 GameObject:
   m_ObjectHideFlags: 0
@@ -1611,9 +1612,33 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -1716586039320307111, guid: f795b5118c0744de3bcac7a83315a637, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.4
+      objectReference: {fileID: 0}
+    - target: {fileID: -1716586039320307111, guid: f795b5118c0744de3bcac7a83315a637, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.73
+      objectReference: {fileID: 0}
+    - target: {fileID: -1716586039320307111, guid: f795b5118c0744de3bcac7a83315a637, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -1.39
+      objectReference: {fileID: 0}
     - target: {fileID: -927199367670048503, guid: f795b5118c0744de3bcac7a83315a637, type: 3}
       propertyPath: m_Name
       value: HandE
+      objectReference: {fileID: 0}
+    - target: {fileID: 2380357146368069180, guid: f795b5118c0744de3bcac7a83315a637, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.4
+      objectReference: {fileID: 0}
+    - target: {fileID: 2380357146368069180, guid: f795b5118c0744de3bcac7a83315a637, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0.81
+      objectReference: {fileID: 0}
+    - target: {fileID: 2380357146368069180, guid: f795b5118c0744de3bcac7a83315a637, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 1.39
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
