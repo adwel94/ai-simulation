@@ -34,13 +34,19 @@ def run_oracle_episode(
 
     while step < max_steps and phase != "finished":
         try:
+            # ── 캡처 (observe) ──
+            if step > 0:
+                client.wait_action_complete()
+                time.sleep(0.2)
+                obs = client.capture()
             world = client.world_state()
 
+            # ── 추론 (think) ──
             actions, next_phase = compute_next_actions(
                 world, phase, target_ball, noise_level, step=step,
             )
 
-            # Log this step
+            # ── 로그 (현재 스크린샷 + 결정된 액션) ──
             episode_log.append({
                 "step": step,
                 "camera_angle": obs.get("camera_angle", 0.0),
@@ -49,11 +55,12 @@ def run_oracle_episode(
                 "reasoning": "",
             })
 
-            # Execute actions (skip memo, send rest to Unity)
+            # ── 실행 (act) ──
             for action in actions:
                 if action.get("type") == "memo":
                     continue
-                obs = client.step(action)
+                client.step(action)
+                client.wait_action_complete()
                 if action.get("type") == "done":
                     break
 

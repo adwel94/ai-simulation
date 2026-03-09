@@ -66,7 +66,7 @@ def main():
 
             success = (
                 result.get("done", False)
-                and result.get("action", {}).get("type") == "done"
+                and any(a.get("type") == "done" for a in result.get("actions", []))
             )
             if success:
                 successes += 1
