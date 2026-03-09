@@ -4,9 +4,9 @@ using UnityEngine;
 using Newtonsoft.Json.Linq;
 
 /// <summary>
-/// 독립 액션 실행기. ClawMachineAgent에서 추출된 물리 액션 로직.
-/// SimulationServer가 Python에서 받은 액션을 이 컴포넌트로 실행.
-/// 기존 내부 AI 모드에서도 재사용 가능.
+/// 독립 액션 실행기 (fire-and-forget + 폴링 아키텍처).
+/// 코루틴 없이 Update() 상태 머신으로 액션 완료를 감지.
+/// Python이 /status 폴링 → /capture로 스크린샷 획득.
 /// </summary>
 public class ActionExecutor : MonoBehaviour
 {
@@ -19,7 +19,6 @@ public class ActionExecutor : MonoBehaviour
 
     [Header("Settings")]
     public int maxSteps = 50;
-    public float settleDelay = 0.5f;
 
     // Camera orbit state
     float orbitAngle = 0f;
@@ -29,9 +28,14 @@ public class ActionExecutor : MonoBehaviour
     // Episode state
     int currentStep = 0;
     bool episodeActive = false;
+
+    // Action state machine
     volatile bool actionInProgress = false;
     float actionStartTime;
-    const float ACTION_TIMEOUT = 25f;
+    string currentActionType = "";
+    float currentActionDuration;
+    float lastGripValue;
+    int gripStableFrames;
 
     // Initial positions for reset
     Vector3 initialClawPosition;
@@ -39,7 +43,7 @@ public class ActionExecutor : MonoBehaviour
     Vector3 initialCameraPosition;
     Quaternion initialCameraRotation;
 
-    // Cached references for input control
+    // Cached references
     BallPickGameInput playerInput;
     BallPickGameController gameController;
 
@@ -60,16 +64,6 @@ public class ActionExecutor : MonoBehaviour
         gameController = FindObjectOfType<BallPickGameController>();
     }
 
-    void Update()
-    {
-        // Watchdog: actionInProgress가 25초 이상 stuck 시 강제 해제
-        if (actionInProgress && Time.time - actionStartTime > ACTION_TIMEOUT)
-        {
-            Debug.LogError("<color=red>[ActionExecutor]</color> WATCHDOG: actionInProgress stuck for 25s! Force resetting.");
-            actionInProgress = false;
-        }
-    }
-
     void Start()
     {
         // Save initial positions for reset
@@ -85,7 +79,6 @@ public class ActionExecutor : MonoBehaviour
             initialCameraPosition = mainCam.transform.position;
             initialCameraRotation = mainCam.transform.rotation;
 
-            // Calculate orbit parameters from initial camera position
             Vector3 camPos = mainCam.transform.position;
             orbitHeight = camPos.y;
             orbitRadius = Mathf.Sqrt(camPos.x * camPos.x + camPos.z * camPos.z);
@@ -94,43 +87,168 @@ public class ActionExecutor : MonoBehaviour
     }
 
     /// <summary>
-    /// Reset episode to initial state asynchronously.
-    /// Waits a frame for physics/rendering to settle before capturing.
+    /// Update() 상태 머신: 액션 완료 감지.
+    /// 코루틴 대신 매 프레임 체크하여 완료 시 actionInProgress = false.
+    /// </summary>
+    void Update()
+    {
+        if (!actionInProgress) return;
+
+        float elapsed = Time.time - actionStartTime;
+        bool complete = false;
+
+        switch (currentActionType)
+        {
+            case "move":
+                if (elapsed >= Mathf.Clamp(currentActionDuration, 0.1f, 5f))
+                {
+                    gameController.SetMoveDirection(Vector2.zero);
+                    complete = true;
+                }
+                break;
+
+            case "lower":
+            case "raise":
+                if (gripperDemo.moveState == BigHandState.Fixed || elapsed > 5f)
+                {
+                    gripperDemo.moveState = BigHandState.Fixed;
+                    complete = true;
+                }
+                break;
+
+            case "grip":
+                float currentGrip = pincherController.CurrentGrip();
+                if (elapsed > 3f)
+                {
+                    pincherController.gripState = GripState.Fixed;
+                    complete = true;
+                }
+                else if (Mathf.Abs(currentGrip - lastGripValue) < 0.005f)
+                {
+                    gripStableFrames++;
+                    if (gripStableFrames > 15)
+                    {
+                        pincherController.gripState = GripState.Fixed;
+                        complete = true;
+                    }
+                }
+                else
+                {
+                    gripStableFrames = 0;
+                }
+                lastGripValue = currentGrip;
+                break;
+
+            case "wait":
+                if (elapsed >= Mathf.Clamp(currentActionDuration, 0.1f, 3f))
+                    complete = true;
+                break;
+
+            case "camera":
+            case "done":
+            case "error":
+                complete = true; // 즉시 완료
+                break;
+        }
+
+        if (complete)
+        {
+            currentStep++;
+            actionInProgress = false;
+
+            bool maxStepsReached = currentStep >= maxSteps;
+            if (maxStepsReached)
+                episodeActive = false;
+
+            Debug.Log($"<color=cyan>[ActionExecutor]</color> Action COMPLETE: {currentActionType} ({elapsed:F1}s) step={currentStep}");
+        }
+    }
+
+    /// <summary>
+    /// Fire-and-forget 액션 실행. 즉시 반환, Update()에서 완료 감지.
+    /// </summary>
+    public void ExecuteActionDirect(ClawAction action)
+    {
+        actionInProgress = true;
+        actionStartTime = Time.time;
+        currentActionType = action.type;
+        currentActionDuration = action.duration;
+        lastGripValue = 0f;
+        gripStableFrames = 0;
+
+        Debug.Log($"<color=cyan>[ActionExecutor]</color> Action START: {action.type}");
+
+        switch (action.type)
+        {
+            case "move":
+                float x = 0, z = 0;
+                switch (action.direction)
+                {
+                    case "left": x = -1; break;
+                    case "right": x = 1; break;
+                    case "forward": z = 1; break;
+                    case "backward": z = -1; break;
+                }
+                gameController.SetMoveDirection(new Vector2(x, z));
+                break;
+
+            case "lower":
+                gameController.LowerClaw();
+                break;
+
+            case "raise":
+                gameController.RaiseClaw();
+                break;
+
+            case "grip":
+                if (action.state == "open")
+                    pincherController.ResetGripToOpen();
+                else
+                    gameController.SetGrip("close");
+                lastGripValue = pincherController.CurrentGrip();
+                break;
+
+            case "camera":
+                float delta = action.direction == "left" ? -90f : 90f;
+                gameController.RotateCamera(delta);
+                orbitAngle = gameController.OrbitAngle;
+                break;
+
+            case "done":
+                episodeActive = false;
+                clawController.isAIControlled = false;
+                break;
+
+            case "error":
+                episodeActive = false;
+                clawController.isAIControlled = false;
+                break;
+
+            case "wait":
+                // Update()에서 시간 경과로 완료
+                break;
+
+            default:
+                Debug.LogWarning($"<color=yellow>[ActionExecutor]</color> Unknown action: {action.type}");
+                actionInProgress = false;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Reset episode. 코루틴 유지 (물리 settle 대기 필요).
     /// </summary>
     public void ResetEpisodeAsync(Action<JObject> onComplete)
     {
-        StartCoroutine(ResetEpisodeCoroutineWrapper(onComplete));
+        Debug.Log("<color=cyan>[ActionExecutor]</color> ResetEpisodeAsync called");
+        StartCoroutine(ResetEpisodeCoroutine(onComplete));
     }
 
-    IEnumerator ResetEpisodeCoroutineWrapper(Action<JObject> onComplete)
-    {
-        bool failed = false;
-        yield return SafeCoroutine(ResetEpisodeCoroutine(), () => failed = true);
-
-        if (failed)
-        {
-            Debug.LogError("<color=red>[ActionExecutor]</color> Reset failed, returning error observation");
-            onComplete?.Invoke(new JObject { ["error"] = "Reset coroutine failed" });
-            yield break;
-        }
-
-        Debug.Log("<color=cyan>[ActionExecutor]</color> Episode reset complete");
-
-        try
-        {
-            onComplete?.Invoke(CaptureObservation());
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"<color=red>[ActionExecutor]</color> CaptureObservation failed: {e.Message}");
-            onComplete?.Invoke(new JObject { ["error"] = e.Message });
-        }
-    }
-
-    IEnumerator ResetEpisodeCoroutine()
+    IEnumerator ResetEpisodeCoroutine(Action<JObject> onComplete)
     {
         currentStep = 0;
         episodeActive = true;
+        actionInProgress = false;
 
         // Stop all movements
         clawController.isAIControlled = true;
@@ -138,7 +256,7 @@ public class ActionExecutor : MonoBehaviour
         gripperDemo.moveState = BigHandState.Fixed;
         pincherController.gripState = GripState.Fixed;
 
-        // Disable player input to prevent overriding AI movement
+        // Disable player input
         if (playerInput != null) playerInput.enabled = false;
         if (gameController != null) gameController.IsAIControlled = true;
 
@@ -176,257 +294,21 @@ public class ActionExecutor : MonoBehaviour
 
         Physics.SyncTransforms();
 
-        // Wait for balls to land on the floor before capturing
+        // Wait for balls to land
         yield return new WaitForSeconds(1.5f);
         yield return new WaitForEndOfFrame();
-    }
 
-    /// <summary>
-    /// Execute an action and return the resulting observation.
-    /// Must be called as a coroutine. Use ExecuteActionAsync for callback pattern.
-    /// </summary>
-    public void ExecuteActionAsync(ClawAction action, Action<JObject> onComplete)
-    {
-        StartCoroutine(ExecuteActionCoroutine(action, onComplete));
-    }
+        Debug.Log("<color=cyan>[ActionExecutor]</color> Episode reset complete");
 
-    IEnumerator ExecuteActionCoroutine(ClawAction action, Action<JObject> onComplete)
-    {
-        actionInProgress = true;
-        actionStartTime = Time.time;
-
-        // Handle terminal actions (no yield return needed, safe from exceptions)
-        if (action.type == "done")
+        try
         {
-            episodeActive = false;
-            clawController.isAIControlled = false;
-            actionInProgress = false;
-
-            var obs = CaptureObservation();
-            obs["done"] = true;
-            obs["done_reason"] = "completed";
-            onComplete?.Invoke(obs);
-            yield break;
-        }
-
-        if (action.type == "error")
-        {
-            episodeActive = false;
-            clawController.isAIControlled = false;
-            actionInProgress = false;
-
-            var obs = CaptureObservation();
-            obs["done"] = true;
-            obs["done_reason"] = action.reasoning ?? "error";
-            onComplete?.Invoke(obs);
-            yield break;
-        }
-
-        // Execute physical action with exception-safe wrapper
-        bool actionFailed = false;
-        yield return SafeCoroutine(ExecutePhysicalAction(action), () => actionFailed = true);
-
-        if (actionFailed)
-        {
-            Debug.LogError("<color=red>[ActionExecutor]</color> Action execution failed, recovering...");
-            actionInProgress = false;
             onComplete?.Invoke(CaptureObservation());
-            yield break;
         }
-
-        // Settle delay
-        yield return new WaitForSeconds(settleDelay);
-
-        currentStep++;
-
-        // Check max steps
-        bool maxStepsReached = currentStep >= maxSteps;
-        if (maxStepsReached)
-            episodeActive = false;
-
-        // Capture observation
-        yield return new WaitForEndOfFrame();
-
-        var observation = CaptureObservation();
-        if (maxStepsReached)
+        catch (Exception e)
         {
-            observation["done"] = true;
-            observation["done_reason"] = "max_steps";
+            Debug.LogWarning($"<color=red>[ActionExecutor]</color> CaptureObservation failed: {e.Message}");
+            onComplete?.Invoke(new JObject { ["error"] = e.Message });
         }
-
-        actionInProgress = false;
-        onComplete?.Invoke(observation);
-    }
-
-    /// <summary>
-    /// 코루틴을 예외-안전하게 실행하는 래퍼.
-    /// C#에서 yield return은 try-catch 안에 넣을 수 없으므로,
-    /// MoveNext()를 수동 호출하여 예외를 잡음.
-    /// </summary>
-    IEnumerator SafeCoroutine(IEnumerator coroutine, Action onError)
-    {
-        while (true)
-        {
-            object current;
-            try
-            {
-                if (!coroutine.MoveNext())
-                    yield break;
-                current = coroutine.Current;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"<color=red>[ActionExecutor]</color> Coroutine exception: {e.Message}\n{e.StackTrace}");
-                onError?.Invoke();
-                yield break;
-            }
-            yield return current;
-        }
-    }
-
-    IEnumerator ExecutePhysicalAction(ClawAction action)
-    {
-        switch (action.type)
-        {
-            case "move":
-                yield return ExecuteMove(action);
-                break;
-            case "lower":
-                yield return ExecuteLower(action);
-                break;
-            case "raise":
-                yield return ExecuteRaise(action);
-                break;
-            case "grip":
-                yield return ExecuteGrip(action);
-                break;
-            case "camera":
-                ExecuteCamera(action);
-                yield return null;
-                break;
-            case "wait":
-                yield return new WaitForSeconds(Mathf.Clamp(action.duration, 0.1f, 3f));
-                break;
-            default:
-                Debug.LogWarning($"<color=yellow>[ActionExecutor]</color> Unknown action: {action.type}");
-                break;
-        }
-    }
-
-    IEnumerator ExecuteMove(ClawAction action)
-    {
-        float x = 0, z = 0;
-        switch (action.direction)
-        {
-            case "left": x = -1; break;
-            case "right": x = 1; break;
-            case "forward": z = -1; break;  // 카메라 쪽으로 (화면 아래)
-            case "backward": z = 1; break;  // 카메라 반대쪽 (화면 위)
-        }
-
-        // 카메라 상대 방향 → 월드 좌표 변환
-        Camera cam = screenshotCapture?.targetCamera;
-        if (cam != null)
-        {
-            Vector3 camForward = cam.transform.forward;
-            Vector3 camRight = cam.transform.right;
-            camForward.y = 0; camRight.y = 0;
-            camForward.Normalize(); camRight.Normalize();
-
-            float worldX = camRight.x * x + camForward.x * z;
-            float worldZ = camRight.z * x + camForward.z * z;
-            x = worldX;
-            z = worldZ;
-        }
-
-        clawController.SetAIMoveDirection(x, z);
-        yield return new WaitForSeconds(Mathf.Clamp(action.duration, 0.1f, 5f));
-        clawController.StopAIMovement();
-    }
-
-    IEnumerator ExecuteLower(ClawAction action)
-    {
-        gripperDemo.moveState = BigHandState.MovingDown;
-        float elapsed = 0f;
-        while (gripperDemo.moveState != BigHandState.Fixed && elapsed < 5f)
-        {
-            elapsed += Time.fixedDeltaTime;
-            yield return new WaitForFixedUpdate();
-        }
-        gripperDemo.moveState = BigHandState.Fixed;
-    }
-
-    IEnumerator ExecuteRaise(ClawAction action)
-    {
-        gripperDemo.moveState = BigHandState.MovingUp;
-        float elapsed = 0f;
-        while (gripperDemo.moveState != BigHandState.Fixed && elapsed < 5f)
-        {
-            elapsed += Time.fixedDeltaTime;
-            yield return new WaitForFixedUpdate();
-        }
-        gripperDemo.moveState = BigHandState.Fixed;
-    }
-
-    IEnumerator ExecuteGrip(ClawAction action)
-    {
-        if (action.state == "open")
-        {
-            pincherController.gripState = GripState.Opening;
-            float elapsed = 0f;
-            while (pincherController.CurrentGrip() > 0.05f && elapsed < 3f)
-            {
-                elapsed += Time.fixedDeltaTime;
-                yield return new WaitForFixedUpdate();
-            }
-            pincherController.gripState = GripState.Fixed;
-        }
-        else if (action.state == "close")
-        {
-            pincherController.gripState = GripState.Closing;
-            float elapsed = 0f;
-            float lastGrip = 0f;
-            int stableFrames = 0;
-
-            while (elapsed < 3f)
-            {
-                float currentGrip = pincherController.CurrentGrip();
-                if (currentGrip >= 0.79f) break;
-                if (Mathf.Abs(currentGrip - lastGrip) < 0.001f)
-                    stableFrames++;
-                else
-                    stableFrames = 0;
-                if (stableFrames > 20) break;
-
-                lastGrip = currentGrip;
-                elapsed += Time.fixedDeltaTime;
-                yield return new WaitForFixedUpdate();
-            }
-            pincherController.gripState = GripState.Fixed;
-        }
-    }
-
-    void ExecuteCamera(ClawAction action)
-    {
-        float deltaAngle = Mathf.Clamp(action.angle, 10f, 90f);
-        if (action.direction == "left")
-            orbitAngle -= deltaAngle;
-        else
-            orbitAngle += deltaAngle;
-
-        Camera mainCam = screenshotCapture.targetCamera;
-        if (mainCam == null) return;
-
-        float rad = orbitAngle * Mathf.Deg2Rad;
-        Vector3 newPos = new Vector3(
-            Mathf.Sin(rad) * orbitRadius,
-            orbitHeight,
-            Mathf.Cos(rad) * orbitRadius
-        );
-        mainCam.transform.position = newPos;
-        mainCam.transform.LookAt(Vector3.zero);
-
-        Debug.Log($"<color=cyan>[ActionExecutor]</color> Camera orbit: {action.direction} {deltaAngle}deg -> {orbitAngle:F0}deg");
     }
 
     /// <summary>
@@ -436,10 +318,7 @@ public class ActionExecutor : MonoBehaviour
     {
         string screenshot = "";
         if (screenshotCapture != null)
-        {
-            // Wait is handled externally
             screenshot = screenshotCapture.CaptureBase64();
-        }
 
         var obs = new JObject
         {
@@ -447,6 +326,7 @@ public class ActionExecutor : MonoBehaviour
             ["step"] = currentStep,
             ["max_steps"] = maxSteps,
             ["camera_angle"] = Math.Round(orbitAngle, 1),
+            ["grip"] = Math.Round(pincherController.CurrentGrip(), 3),
             ["done"] = !episodeActive,
             ["done_reason"] = ""
         };
@@ -461,7 +341,6 @@ public class ActionExecutor : MonoBehaviour
     {
         var state = new JObject();
 
-        // Claw position
         Vector3 clawPos = clawController.transform.position;
         state["claw"] = new JObject
         {
@@ -470,16 +349,10 @@ public class ActionExecutor : MonoBehaviour
             ["z"] = Math.Round(clawPos.z, 4)
         };
 
-        // Camera angle
         state["camera_angle"] = Math.Round(orbitAngle, 1);
-
-        // Grip state
         state["grip"] = Math.Round(pincherController.CurrentGrip(), 3);
-
-        // Move speed
         state["move_speed"] = clawController.moveSpeed;
 
-        // Camera basis vectors (from actual Unity camera transform)
         Camera cam = screenshotCapture?.targetCamera;
         if (cam != null)
         {
@@ -489,7 +362,6 @@ public class ActionExecutor : MonoBehaviour
             state["cam_forward"] = new JObject { ["x"] = Math.Round(camFwd.x, 4), ["z"] = Math.Round(camFwd.z, 4) };
         }
 
-        // Ball positions
         var balls = new JArray();
         if (ballSpawner != null)
         {
@@ -566,7 +438,6 @@ public class ActionExecutor : MonoBehaviour
         gripperDemo.moveState = BigHandState.Fixed;
         pincherController.gripState = GripState.Fixed;
 
-        // Re-enable player input
         if (playerInput != null) playerInput.enabled = true;
         if (gameController != null) gameController.IsAIControlled = false;
     }

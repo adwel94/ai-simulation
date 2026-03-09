@@ -1,3 +1,5 @@
+import time
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -45,20 +47,28 @@ class UnitySimClient:
         return resp.json()
 
     def step(self, action: dict) -> dict:
-        """POST /step — execute an action, returns new observation.
-
-        Action format:
-            {"type": "move", "direction": "left", "duration": 0.3, "reasoning": "..."}
-            {"type": "lower", "duration": 0.5}
-            {"type": "raise", "duration": 0.5}
-            {"type": "grip", "state": "close"}
-            {"type": "camera", "direction": "left", "angle": 45}
-            {"type": "done", "reasoning": "..."}
-        """
+        """POST /step — fire-and-forget action execution. Returns immediately."""
         resp = self._session.post(
             f"{self.base_url}/step",
             json=action,
-            timeout=self.timeout,
+            timeout=5,
         )
         resp.raise_for_status()
         return resp.json()
+
+    def wait_action_complete(self, timeout: float = 10.0, poll_interval: float = 0.05) -> dict:
+        """Poll /status until action_in_progress == false."""
+        start = time.time()
+        while time.time() - start < timeout:
+            status = self.status()
+            if not status.get("action_in_progress", False):
+                return status
+            time.sleep(poll_interval)
+        raise TimeoutError(f"Action not completed within {timeout}s")
+
+    def step_and_observe(self, action: dict, settle: float = 0.3) -> dict:
+        """step → wait → settle → capture. 기존 blocking step() 대체."""
+        self.step(action)
+        self.wait_action_complete()
+        time.sleep(settle)
+        return self.capture()

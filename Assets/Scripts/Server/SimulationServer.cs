@@ -64,6 +64,10 @@ public class SimulationServer : MonoBehaviour
     void Update()
     {
         // Process main thread queue
+        int count = mainThreadQueue.Count;
+        if (count > 0)
+            Debug.Log($"<color=cyan>[SimulationServer]</color> Processing {count} queue items");
+
         while (mainThreadQueue.TryDequeue(out var action))
         {
             try
@@ -72,7 +76,7 @@ public class SimulationServer : MonoBehaviour
             }
             catch (Exception e)
             {
-                Debug.LogError($"<color=red>[SimulationServer]</color> Main thread action error: {e.Message}");
+                Debug.LogWarning($"<color=red>[SimulationServer]</color> Main thread action error: {e.Message}");
             }
         }
     }
@@ -147,7 +151,7 @@ public class SimulationServer : MonoBehaviour
             }
             catch (Exception e2)
             {
-                Debug.LogError($"<color=red>[SimulationServer]</color> 서버 시작 실패: {e2.Message}");
+                Debug.LogWarning($"<color=red>[SimulationServer]</color> 서버 시작 실패: {e2.Message}");
                 OnStatusChanged?.Invoke($"서버 시작 실패: {e2.Message}");
             }
         }
@@ -210,7 +214,7 @@ public class SimulationServer : MonoBehaviour
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"<color=red>[SimulationServer]</color> Unhandled request error: {ex}");
+                        Debug.LogWarning($"<color=red>[SimulationServer]</color> Unhandled request error: {ex}");
                         try { context.Response.Close(); } catch { }
                     }
                 });
@@ -227,7 +231,7 @@ public class SimulationServer : MonoBehaviour
             catch (Exception e)
             {
                 if (isRunning)
-                    Debug.LogError($"<color=red>[SimulationServer]</color> Listener error: {e.Message}");
+                    Debug.LogWarning($"<color=red>[SimulationServer]</color> Listener error: {e.Message}");
             }
         }
     }
@@ -286,7 +290,7 @@ public class SimulationServer : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"<color=red>[SimulationServer]</color> Request error: {e.Message}");
+            Debug.LogWarning($"<color=red>[SimulationServer]</color> Request error: {e.Message}");
             SendError(response, 500, e.Message);
         }
     }
@@ -320,7 +324,7 @@ public class SimulationServer : MonoBehaviour
             return;
         }
 
-        using var waitHandle = new ManualResetEventSlim(false);
+        var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
 
         mainThreadQueue.Enqueue(() =>
@@ -331,17 +335,19 @@ public class SimulationServer : MonoBehaviour
             }
             finally
             {
-                waitHandle.Set();
+                try { waitHandle.Set(); } catch (ObjectDisposedException) { }
             }
         });
 
         if (!waitHandle.Wait(10000))
         {
-            Debug.LogError("<color=red>[SimulationServer]</color> /capture TIMEOUT — main thread queue may be blocked");
+            Debug.LogWarning("<color=red>[SimulationServer]</color> /capture TIMEOUT — main thread queue may be blocked");
             SendError(response, 504, "Capture timed out");
+            waitHandle.Dispose();
             return;
         }
 
+        waitHandle.Dispose();
         SendJson(response, result);
     }
 
@@ -353,7 +359,7 @@ public class SimulationServer : MonoBehaviour
             return;
         }
 
-        using var waitHandle = new ManualResetEventSlim(false);
+        var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
 
         mainThreadQueue.Enqueue(() =>
@@ -364,17 +370,19 @@ public class SimulationServer : MonoBehaviour
             }
             finally
             {
-                waitHandle.Set();
+                try { waitHandle.Set(); } catch (ObjectDisposedException) { }
             }
         });
 
         if (!waitHandle.Wait(10000))
         {
-            Debug.LogError("<color=red>[SimulationServer]</color> /world_state TIMEOUT — main thread queue may be blocked");
+            Debug.LogWarning("<color=red>[SimulationServer]</color> /world_state TIMEOUT — main thread queue may be blocked");
             SendError(response, 504, "WorldState timed out");
+            waitHandle.Dispose();
             return;
         }
 
+        waitHandle.Dispose();
         SendJson(response, result);
     }
 
@@ -394,26 +402,31 @@ public class SimulationServer : MonoBehaviour
         }
 
         // Execute on main thread and wait for result (async with coroutine)
-        using var waitHandle = new ManualResetEventSlim(false);
+        var waitHandle = new ManualResetEventSlim(false);
         JObject result = null;
+        bool timedOut = false;
 
         mainThreadQueue.Enqueue(() =>
         {
             actionExecutor.ResetEpisodeAsync((obs) =>
             {
+                if (timedOut) return;
                 result = obs;
-                waitHandle.Set();
+                try { waitHandle.Set(); } catch (ObjectDisposedException) { }
             });
         });
 
         // Wait for reset + frame settle (timeout 30s)
         if (!waitHandle.Wait(30000))
         {
-            Debug.LogError("<color=red>[SimulationServer]</color> /reset TIMEOUT — main thread queue may be blocked");
+            timedOut = true;
+            Debug.LogWarning("<color=red>[SimulationServer]</color> /reset TIMEOUT — main thread queue may be blocked");
             SendError(response, 504, "Reset timed out");
+            waitHandle.Dispose();
             return;
         }
 
+        waitHandle.Dispose();
         mainThreadQueue.Enqueue(() => OnStatusChanged?.Invoke("에피소드 리셋 완료"));
         SendJson(response, result);
     }
@@ -466,36 +479,20 @@ public class SimulationServer : MonoBehaviour
 
         Debug.Log($"<color=cyan>[SimulationServer]</color> Action: type={action.type}, direction={action.direction}, duration={action.duration}");
 
-        // Execute on main thread and wait for result
-        using var waitHandle = new ManualResetEventSlim(false);
-        JObject result = null;
-
+        // Fire-and-forget: 메인 스레드에서 즉시 실행, 블로킹 없음
         mainThreadQueue.Enqueue(() =>
         {
-            actionExecutor.ExecuteActionAsync(action, (obs) =>
-            {
-                result = obs;
-                waitHandle.Set();
-            });
+            actionExecutor.ExecuteActionDirect(action);
+            OnStatusChanged?.Invoke($"Action: {action.type}");
         });
 
-        // Wait for action execution (timeout 30s for long actions)
-        if (!waitHandle.Wait(30000))
+        // 즉시 응답 (대기 없음)
+        SendJson(response, new JObject
         {
-            Debug.LogError($"<color=red>[SimulationServer]</color> /step TIMEOUT — action={action.type}, actionInProgress={actionExecutor.ActionInProgress}");
-            SendError(response, 504, "Action execution timed out");
-            return;
-        }
-
-        if (result == null)
-        {
-            SendError(response, 500, "No observation returned");
-            return;
-        }
-
-        string stepInfo = $"Step {result["step"]}, done={result["done"]}";
-        mainThreadQueue.Enqueue(() => OnStatusChanged?.Invoke(stepInfo));
-        SendJson(response, result);
+            ["accepted"] = true,
+            ["action"] = action.type,
+            ["step"] = actionExecutor.CurrentStep
+        });
     }
 
     // ─────────────────────────────────

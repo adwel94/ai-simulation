@@ -17,6 +17,7 @@ class ClawState(TypedDict, total=False):
     # Current observation from Unity
     screenshot_base64: str
     camera_angle: float
+    grip: float
 
     # Actions decided by LLM (multiple tool calls per turn)
     actions: list

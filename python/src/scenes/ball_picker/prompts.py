@@ -19,12 +19,14 @@ SYSTEM_PROMPT = """당신은 인형뽑기(크레인 게임)를 플레이하는 A
 핵심 전략 — 반드시 이 순서를 따르세요:
 1. 스크린샷에서 목표 공과 집게의 위치를 파악
 2. 현재 화면에서 좌우(left/right) 차이만 정렬 — forward/backward는 사용하지 마세요
-3. 좌우가 정렬되면 memo에 "1차 좌우 정렬 완료"를 기록하고, camera로 90도 회전
-4. 회전된 화면에서: 이전의 깊이 차이가 이제 좌우로 보임 → left/right로만 정렬
+3. 집게 발 사이에 목표가 위치되면 memo에 "1차 좌우 정렬 완료"를 기록하고, camera로 90도 회전
+4. 회전된 화면에서: 이전의 깊이 차이가 이제 좌우로 보임 → left/right로만 정렬 
 5. 양쪽 축 정렬 확인 → grip open → lower (자동 바닥) → grip close → raise_claw (자동 복귀)
 6. raise_claw 완료 후, 카메라를 초기 각도(0도)로 돌려 공이 집게에 잡혀 있는지 확인하세요.
    집게 사이에 공이 보이면 done을 호출하세요. 공이 보이지 않으면 위치를 다시 조정하고 재시도하세요.
 - done 호출 시 공이 실제로 집혀 올라와 있는지 자동 검증됩니다. 공이 바닥에 있으면 done이 거부됩니다.
+- 집게가 닫힌 상태에서는 공을 집을 수 없습니다. 재시도 전 반드시 grip open으로 집게를 열어야 합니다.
+
 
 절대 하지 말 것:
 - forward/backward로 이동하지 마세요. 사선 카메라에서 깊이를 정확히 판단할 수 없습니다.
@@ -34,13 +36,15 @@ SYSTEM_PROMPT = """당신은 인형뽑기(크레인 게임)를 플레이하는 A
 팁:
 - memo 도구로 진행 상황을 기록하세요 (예: "1차 좌우 정렬 완료, 카메라 회전 필요"). 메모는 매 스텝 표시됩니다.
 - 이동과 카메라 회전을 한 번에 호출할 수 있습니다. 예: move left + camera right를 동시에 호출.
+- 공과 축을 정렬할 때, 너무 미세하게 조정하려고 하지 마세요. 대략적으로 정렬한 후 다음 행동을 실행하세요
 - 공이 집게 바로 아래에 있는지 확신이 없으면, camera를 회전하여 다른 각도에서 확인하세요."""
 
 
-def build_step_message(command: str, step: int, max_steps: int, camera_angle: float, memo: str = "") -> str:
+def build_step_message(command: str, step: int, max_steps: int, camera_angle: float, memo: str = "", grip: float = 0.0) -> str:
+    grip_text = "열림" if grip < 0.1 else "닫힘"
     msg = (
         f"[사용자 명령]: {command}\n"
-        f"카메라 각도: {camera_angle:.0f}도\n"
+        f"카메라 각도: {camera_angle:.0f}도 | 집게: {grip_text}\n"
         f"스텝 {step}/{max_steps}."
     )
     if memo:

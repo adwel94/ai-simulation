@@ -55,18 +55,16 @@ def grip(state: Literal["open", "close"], reasoning: str) -> str:
 @tool
 def camera(
     direction: Literal["left", "right"],
-    angle: float,
     reasoning: str,
 ) -> str:
-    """카메라를 좌/우로 회전하여 다른 각도에서 관찰합니다.
+    """카메라를 좌/우로 90도 회전하여 다른 각도에서 관찰합니다.
     물체가 가려지거나 위치 파악이 어려울 때 사용하세요.
 
     Args:
         direction: 회전 방향 (left 또는 right)
-        angle: 회전 각도(도)
         reasoning: 이 행동을 선택한 이유
     """
-    return f"camera {direction} {angle}deg"
+    return f"camera {direction} 90deg"
 
 
 @tool

@@ -72,6 +72,7 @@ def observe(state: ClawState) -> dict:
         return {
             "screenshot_base64": obs["screenshot_base64"],
             "camera_angle": obs.get("camera_angle", 0.0),
+            "grip": obs.get("grip", 0.0),
             "step": obs.get("step", 0),
             "max_steps": max_steps,
             "done": False,
@@ -101,6 +102,7 @@ def think(state: ClawState) -> dict:
         max_steps=state["max_steps"],
         camera_angle=state["camera_angle"],
         memo=state.get("memo", ""),
+        grip=state.get("grip", 0.0),
     )
 
     user_message = HumanMessage(
@@ -221,7 +223,7 @@ def act(state: ClawState) -> dict:
         if action.get("type") == "done":
             ball_held, ball_name = _verify_ball_held(client)
             if ball_held or done_attempts >= MAX_DONE_RETRIES:
-                obs = client.step(action)
+                obs = client.step_and_observe(action)
                 is_done = True
                 if ball_held:
                     logger.info(f"Step {state['step']}: Done verified - '{ball_name}' held")
@@ -236,7 +238,7 @@ def act(state: ClawState) -> dict:
             break
 
         logger.info(f"Step {state['step']}: Executing [{i+1}/{len(actions)}] {action.get('type', '?')}")
-        obs = client.step(action)
+        obs = client.step_and_observe(action)
         is_done = obs.get("done", False) or action.get("type") == "done"
         if is_done:
             break
@@ -302,6 +304,7 @@ def act(state: ClawState) -> dict:
     return {
         "screenshot_base64": obs.get("screenshot_base64", "") if obs else state.get("screenshot_base64", ""),
         "camera_angle": obs.get("camera_angle", state["camera_angle"]) if obs else state["camera_angle"],
+        "grip": obs.get("grip", state.get("grip", 0.0)) if obs else state.get("grip", 0.0),
         "step": new_step,
         "done": is_done,
         "done_reason": done_reason,
