@@ -15,6 +15,7 @@ class SceneConfig:
     default_commands: list[str]
     tool_call_to_action: Callable[[dict], dict]
     build_step_message: Callable[..., str]
+    adjust_command: Callable | None = None
 
 
 def register_scene(config: SceneConfig):

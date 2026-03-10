@@ -1452,8 +1452,8 @@ MonoBehaviour:
   - "\uC624\uC774"
   - "\uACE0\uCD94"
   - "\uD1A0\uB9C8\uD1A0"
-  spawnCount: 3
-  objectScale: 0.3
+  spawnCount: 5
+  objectScale: 0.21
   objectMass: 0.1
   autoSpawnOnStart: 1
   spawnAreaMin: {x: -1.5, y: -1.5}

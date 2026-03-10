@@ -71,6 +71,15 @@ def observe(state: ClawState) -> dict:
         scene_name = _get_scene_name(state)
         prompt = scene_store.get_prompt(scene_name, scene.system_prompt)
         max_steps = state.get("max_steps") or obs.get("max_steps", settings.max_steps)
+
+        # 리셋 후 명령어 대상이 스폰되지 않았으면 자동 교체
+        command = state.get("command", "")
+        if scene.adjust_command:
+            original = command
+            command = scene.adjust_command(client, command)
+            if command != original:
+                logger.info(f"Command adjusted: '{original}' -> '{command}'")
+
         return {
             "screenshot_base64": obs["screenshot_base64"],
             "camera_angle": obs.get("camera_angle", 0.0),
@@ -80,6 +89,7 @@ def observe(state: ClawState) -> dict:
             "done": False,
             "messages": [SystemMessage(content=prompt)],
             "episode_log": [],
+            "command": command,
         }
 
     # 이후 스텝: 이전 액션 완료 대기 + 캡처
