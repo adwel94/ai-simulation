@@ -16,6 +16,7 @@ public class ActionExecutor : MonoBehaviour
     public PincherController pincherController;
     public ScreenshotCapture screenshotCapture;
     public BallSpawner ballSpawner;
+    public FruitSpawner fruitSpawner;
 
     [Header("Settings")]
     public int maxSteps = 50;
@@ -45,6 +46,11 @@ public class ActionExecutor : MonoBehaviour
     BallPickGameInput playerInput;
     BallPickGameController gameController;
 
+    /// <summary>
+    /// 활성 스포너 (FruitSpawner 우선, 없으면 BallSpawner).
+    /// </summary>
+    IObjectSpawner Spawner => (IObjectSpawner)fruitSpawner ?? (IObjectSpawner)ballSpawner;
+
     public int CurrentStep => currentStep;
     public int MaxSteps => maxSteps;
     public float OrbitAngle => orbitAngle;
@@ -63,6 +69,7 @@ public class ActionExecutor : MonoBehaviour
         if (pincherController == null) pincherController = FindObjectOfType<PincherController>();
         if (screenshotCapture == null) screenshotCapture = FindObjectOfType<ScreenshotCapture>();
         if (ballSpawner == null) ballSpawner = FindObjectOfType<BallSpawner>();
+        if (fruitSpawner == null) fruitSpawner = FindObjectOfType<FruitSpawner>();
         playerInput = FindObjectOfType<BallPickGameInput>();
         gameController = FindObjectOfType<BallPickGameController>();
     }
@@ -282,9 +289,8 @@ public class ActionExecutor : MonoBehaviour
             orbitAngle = Mathf.Atan2(initialCameraPosition.x, initialCameraPosition.z) * Mathf.Rad2Deg;
         }
 
-        // 공 재배치
-        if (ballSpawner != null)
-            ballSpawner.SpawnRandomBalls();
+        // 오브젝트 재배치
+        Spawner?.SpawnRandom();
 
         Physics.SyncTransforms();
 
@@ -356,17 +362,18 @@ public class ActionExecutor : MonoBehaviour
             state["cam_forward"] = new JObject { ["x"] = Math.Round(camFwd.x, 4), ["z"] = Math.Round(camFwd.z, 4) };
         }
 
-        var balls = new JArray();
-        if (ballSpawner != null)
+        var objects = new JArray();
+        var spawner = Spawner;
+        if (spawner != null)
         {
-            foreach (var ball in ballSpawner.SpawnedBalls)
+            foreach (var obj in spawner.SpawnedObjects)
             {
-                if (ball != null)
+                if (obj != null)
                 {
-                    Vector3 p = ball.transform.position;
-                    balls.Add(new JObject
+                    Vector3 p = obj.transform.position;
+                    objects.Add(new JObject
                     {
-                        ["name"] = ball.name,
+                        ["name"] = obj.name,
                         ["x"] = Math.Round(p.x, 4),
                         ["y"] = Math.Round(p.y, 4),
                         ["z"] = Math.Round(p.z, 4)
@@ -374,7 +381,8 @@ public class ActionExecutor : MonoBehaviour
                 }
             }
         }
-        state["balls"] = balls;
+        state["objects"] = objects;
+        state["balls"] = objects; // backward compatibility
 
         return state;
     }

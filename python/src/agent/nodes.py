@@ -38,7 +38,7 @@ def _verify_ball_held(client: UnitySimClient) -> tuple[bool, str]:
     """world_state로 공이 집혀 올라와 있는지 확인."""
     try:
         world = client.world_state()
-        for ball in world.get("balls", []):
+        for ball in world.get("objects", world.get("balls", [])):
             if ball.get("y", 0) > BALL_HELD_Y_THRESHOLD:
                 return True, ball.get("name", "unknown")
         return False, ""
@@ -276,7 +276,7 @@ def act(state: ClawState) -> dict:
                 result_text = f"메모 저장됨: {tc.get('args', {}).get('content', '')[:100]}"
             elif tc_name == "done" and verification_failed:
                 result_text = (
-                    "공을 잡지 못했습니다! 모든 공이 바닥에 있습니다. "
+                    "물체를 잡지 못했습니다! 모든 물체가 바닥에 있습니다. "
                     "집게 위치를 다시 확인하고 재시도하세요. "
                     "grip open → 위치 조정 → lower → grip close → raise_claw 순서로 다시 시도하세요."
                 )

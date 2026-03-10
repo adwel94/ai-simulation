@@ -41,3 +41,4 @@ def _auto_import_scenes():
         return
     # Import known scenes — add new scenes here
     import src.scenes.ball_picker  # noqa: F401
+    import src.scenes.fruit_picker  # noqa: F401

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class BallSpawner : MonoBehaviour
+public class BallSpawner : MonoBehaviour, IObjectSpawner
 {
     [Header("Ball Settings")]
     public float ballRadius = 0.02f;
@@ -31,6 +31,11 @@ public class BallSpawner : MonoBehaviour
     // Auto-spawned balls tracked for cleanup
     readonly List<GameObject> spawnedBalls = new List<GameObject>();
     public List<GameObject> SpawnedBalls => spawnedBalls;
+
+    // IObjectSpawner implementation
+    public List<GameObject> SpawnedObjects => spawnedBalls;
+    public void SpawnRandom() => SpawnRandomBalls();
+    public void ClearObjects() => ClearBalls();
 
     Rect buttonRect;
     Rect[] colorButtonRects;
