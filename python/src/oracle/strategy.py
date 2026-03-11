@@ -173,6 +173,8 @@ def compute_next_actions(
                  "reasoning": "공을 고정하기 위해 집게를 닫습니다."},
                 {"type": "raise",
                  "reasoning": "공을 들어올립니다."},
+                {"type": "camera", "direction": "left", "angle": 90,
+                 "reasoning": "공을 들어올린 후 초기 각도로 카메라를 복귀합니다."},
             ]
             return actions, "verify_done"
 
