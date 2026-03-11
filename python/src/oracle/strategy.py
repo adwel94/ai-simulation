@@ -9,6 +9,7 @@ that match real AI agent output patterns.
 import random
 
 ALIGN_THRESHOLD = 0.05  # units below which alignment is considered done
+BALL_HELD_Y_THRESHOLD = 0.1  # ball Y above this → held by claw
 
 
 def select_target_ball(world_state: dict, command: str) -> dict | None:
@@ -161,7 +162,7 @@ def compute_next_actions(
         delta_right, _ = _project_delta(world_state, target_ball)
 
         if abs(delta_right) < ALIGN_THRESHOLD:
-            # Both axes aligned — pickup sequence
+            # Both axes aligned — pickup sequence (raise까지, done은 verify_done에서)
             actions = [
                 {"type": "memo", "content": "양방향 정렬 완료. 집기 동작 수행."},
                 {"type": "grip", "state": "open",
@@ -172,10 +173,8 @@ def compute_next_actions(
                  "reasoning": "공을 고정하기 위해 집게를 닫습니다."},
                 {"type": "raise",
                  "reasoning": "공을 들어올립니다."},
-                {"type": "done",
-                 "reasoning": f"{ball_name}을 성공적으로 집어 올렸으므로 작업을 완료합니다."},
             ]
-            return actions, "finished"
+            return actions, "verify_done"
 
         direction = "right" if delta_right > 0 else "left"
         duration = abs(delta_right) / move_speed
@@ -203,4 +202,32 @@ def compute_next_actions(
         ]
         return actions, "align_lr2"
 
+    elif phase == "verify_done":
+        # raise 후 스크린샷 캡처됨 — 공 보유 여부 확인 후 done
+        ball_name_for_done = _ball_display_name(target_ball)
+        ball_y = _find_target_y(world_state, target_ball)
+        held = ball_y > BALL_HELD_Y_THRESHOLD
+
+        if held:
+            reasoning = f"{ball_name_for_done}을 성공적으로 집어 올렸으므로 작업을 완료합니다."
+        else:
+            reasoning = f"{ball_name_for_done}을 집지 못했지만 시도를 완료합니다."
+
+        actions = [
+            {"type": "done", "reasoning": reasoning},
+        ]
+        return actions, "finished"
+
     raise ValueError(f"Unknown phase: {phase}")
+
+
+def _find_target_y(world_state: dict, target_ball: dict) -> float:
+    """Find the Y position of the target ball in the current world state."""
+    target_name = target_ball.get("name", "")
+    for ball in world_state.get("balls", []):
+        if ball.get("name") == target_name:
+            return ball.get("y", 0.0)
+    balls = world_state.get("balls", [])
+    if balls:
+        return max(b.get("y", 0.0) for b in balls)
+    return 0.0

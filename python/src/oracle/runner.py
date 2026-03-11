@@ -5,7 +5,11 @@ import random
 import time
 
 from src.data.logger import EpisodeLogger
-from src.oracle.strategy import compute_next_actions, select_target_ball
+from src.oracle.strategy import (
+    BALL_HELD_Y_THRESHOLD,
+    compute_next_actions,
+    select_target_ball,
+)
 from src.unity.client import UnitySimClient
 
 logger = logging.getLogger(__name__)
@@ -70,7 +74,18 @@ def run_oracle_episode(
             logger.warning(f"Oracle step {step} failed: {e}", exc_info=True)
             return episode_log, False
 
-    success = phase == "finished"
+    # phase == "finished" + 공 Y 좌표로 실제 보유 확인
+    if phase == "finished":
+        world = client.world_state()
+        ball_y = 0.0
+        target_name = target_ball.get("name", "")
+        for ball in world.get("balls", []):
+            if ball.get("name") == target_name:
+                ball_y = ball.get("y", 0.0)
+                break
+        success = ball_y > BALL_HELD_Y_THRESHOLD
+    else:
+        success = False
     return episode_log, success
 
 

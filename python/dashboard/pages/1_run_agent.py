@@ -1,5 +1,6 @@
 """Real-time agent execution page."""
 
+import re
 import sys
 from pathlib import Path
 
@@ -11,6 +12,42 @@ from dashboard.components import setup_sidebar, show_action
 from src.agent.graph import build_graph
 from src.data.logger import EpisodeLogger
 from src.scenes import get_scene
+
+
+_ROLE_LABEL = {
+    "SystemMessage": ("SYSTEM", "gray"),
+    "HumanMessage": ("USER", "blue"),
+    "AIMessage": ("AI", "green"),
+    "ToolMessage": ("TOOL", "orange"),
+}
+
+
+def _parse_debug_messages(debug_log: str) -> list[dict]:
+    """Parse debug_log string into [{role, content}, ...]."""
+    clean = debug_log.replace("--- LLM RESPONSE ---", "")
+    blocks = re.split(r'\n*=== (\w+) ===\n', clean)
+    results = []
+    i = 1
+    while i < len(blocks) - 1:
+        results.append({"role": blocks[i].strip(), "content": blocks[i + 1].strip()})
+        i += 2
+    return results
+
+
+def _render_chat_messages(container, messages: list[dict]):
+    """Render parsed messages as styled cards in the given container."""
+    with container:
+        for msg in messages:
+            label, color = _ROLE_LABEL.get(msg["role"], (msg["role"], "gray"))
+            st.markdown(f"**:{color}[{label}]**")
+            content = msg["content"]
+            # System prompt is long — collapse it
+            if msg["role"] == "SystemMessage" and len(content) > 300:
+                with st.expander("System prompt", expanded=False):
+                    st.code(content, language=None)
+            else:
+                st.code(content, language=None)
+            st.divider()
 
 config = setup_sidebar()
 scene = get_scene(config["scene_name"])
@@ -62,9 +99,11 @@ if run_clicked and command.strip():
     status_text = st.empty()
     img_col, info_col = st.columns([1, 1])
     image_placeholder = img_col.empty()
-    action_container = info_col.container(height=500)
-    debug_container = st.container()
-    accumulated_debug = []
+    action_wrapper = info_col.container(height=500)
+    action_placeholder = action_wrapper.empty()
+    debug_wrapper = st.container(height=500)
+    debug_placeholder = debug_wrapper.empty()
+    accumulated_actions = []
     final_state = initial_state
 
     try:
@@ -80,7 +119,10 @@ if run_clicked and command.strip():
             if node_name == "observe":
                 step = final_state.get("step", 0)
                 max_s = final_state.get("max_steps", config["max_steps"])
-                status_text.markdown(f"**Step {step}/{max_s}** — Observing...")
+                status_text.markdown(
+                    f"**Step {step}/{max_s}** — "
+                    f":eye: **관측 중** — Unity에서 스크린샷 캡처"
+                )
                 if final_state.get("screenshot_base64"):
                     image_placeholder.image(
                         __import__("base64").b64decode(final_state["screenshot_base64"]),
@@ -90,28 +132,42 @@ if run_clicked and command.strip():
 
             elif node_name == "think":
                 step = final_state.get("step", 0)
+                max_s = final_state.get("max_steps", 0)
+                actions = final_state.get("actions", [])
+                tool_names = [a.get("type", "?") for a in actions if a.get("type") != "memo"]
+                tool_summary = ", ".join(tool_names) if tool_names else "—"
                 status_text.markdown(
-                    f"**Step {step}/{final_state.get('max_steps', 0)}** — LLM response"
+                    f"**Step {step}/{max_s}** — "
+                    f":brain: **추론 완료** — 호출: `{tool_summary}`"
                 )
-                with action_container:
-                    action_container.empty()
-                    st.markdown("**Current Action:**")
-                    for act in final_state.get("actions", []):
-                        show_action(act)
-
-                accumulated_debug.append({
+                accumulated_actions.append({
                     "step": step,
-                    "debug_log": final_state.get("debug_log", ""),
+                    "actions": final_state.get("actions", []),
                 })
-                with debug_container:
-                    debug_container.empty()
-                    for d in accumulated_debug:
-                        is_latest = d is accumulated_debug[-1]
-                        with st.expander(
-                            f"Step {d['step']} — Message Log",
-                            expanded=is_latest,
-                        ):
-                            st.code(d["debug_log"], language=None)
+                with action_placeholder.container():
+                    for entry in accumulated_actions:
+                        st.markdown(f"**Step {entry['step']}**")
+                        for act in entry["actions"]:
+                            show_action(act)
+                        st.divider()
+                    # Auto-scroll
+                    st.components.v1.html(
+                        "<script>"
+                        "const f = window.parent.document;"
+                        "const c = f.querySelectorAll('[data-testid=\"stVerticalBlock\"]');"
+                        "for (const el of c) {"
+                        "  if (el.parentElement && el.parentElement.style.overflow) {"
+                        "    el.parentElement.scrollTop = el.parentElement.scrollHeight;"
+                        "  }"
+                        "}"
+                        "</script>",
+                        height=0,
+                    )
+
+                debug_log = final_state.get("debug_log", "")
+                if debug_log:
+                    parsed = _parse_debug_messages(debug_log)
+                    _render_chat_messages(debug_placeholder.container(), parsed)
 
             elif node_name == "act":
                 step = final_state.get("step", 0)
@@ -119,7 +175,20 @@ if run_clicked and command.strip():
                 progress = min(step / max_s, 1.0) if max_s > 0 else 0
                 progress_bar.progress(progress)
 
-                status_text.markdown(f"**Step {step}/{max_s}** — Action executed")
+                actions = final_state.get("actions", [])
+                tool_names = [a.get("type", "?") for a in actions if a.get("type") != "memo"]
+                tool_summary = ", ".join(tool_names) if tool_names else "—"
+                is_done = final_state.get("done", False)
+                if is_done:
+                    status_text.markdown(
+                        f"**Step {step}/{max_s}** — "
+                        f":checkered_flag: **완료** — `done` 실행됨"
+                    )
+                else:
+                    status_text.markdown(
+                        f"**Step {step}/{max_s}** — "
+                        f":mechanical_arm: **실행 완료** — `{tool_summary}` Unity에 전송됨"
+                    )
 
                 if final_state.get("screenshot_base64"):
                     image_placeholder.image(
