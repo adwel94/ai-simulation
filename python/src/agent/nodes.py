@@ -98,7 +98,7 @@ def observe(state: ClawState) -> dict:
         time.sleep(0.2)
         obs = client.capture()
     except Exception as e:
-        logger.warning(f"Observe failed: {e}")
+        logger.warning(f"Observe failed: {e}", exc_info=True)
         return {}
 
     return {
@@ -147,7 +147,10 @@ def think(state: ClawState) -> dict:
     messages.append(user_message)
 
     logger.info(f"Step {state['step']}: Sending to LLM ({settings.model_name}) with tools...")
+    t0 = time.time()
     response = llm_with_tools.invoke(messages)
+    elapsed = time.time() - t0
+    logger.info(f"Step {state['step']}: LLM responded in {elapsed:.1f}s")
 
     # Extract tool calls from response (multiple allowed)
     # If no tool calls, retry once with a nudge message
@@ -266,7 +269,7 @@ def act(state: ClawState) -> dict:
             client.step(action)
             client.wait_action_complete()
         except Exception as e:
-            logger.warning(f"Step {state['step']}: Action failed: {e}")
+            logger.warning(f"Step {state['step']}: Action failed: {e} | action={action}", exc_info=True)
             break
 
     # Build action type map for ToolMessage content

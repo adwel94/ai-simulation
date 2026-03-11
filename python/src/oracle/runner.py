@@ -67,7 +67,7 @@ def run_oracle_episode(
             phase = next_phase
             step += 1
         except Exception as e:
-            logger.warning(f"Oracle step {step} failed: {e}")
+            logger.warning(f"Oracle step {step} failed: {e}", exc_info=True)
             return episode_log, False
 
     success = phase == "finished"

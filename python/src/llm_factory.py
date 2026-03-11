@@ -1,8 +1,12 @@
 """LLM provider factory. Creates the appropriate LangChain chat model based on settings."""
 
+import logging
+
 from langchain_core.language_models import BaseChatModel
 
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def create_llm(
@@ -19,6 +23,7 @@ def create_llm(
     """
     provider = provider or settings.llm_provider
     model = model_name or settings.model_name
+    logger.info(f"Creating LLM: provider={provider}, model={model}")
 
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
@@ -43,6 +48,7 @@ def create_llm(
             kwargs["base_url"] = url
         return ChatOpenAI(**kwargs)
     else:
+        logger.error(f"Unknown LLM provider: '{provider}'")
         raise ValueError(
             f"Unknown LLM provider: '{provider}'. "
             f"Set LLM_PROVIDER to 'gemini' or 'openai' in .env"

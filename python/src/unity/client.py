@@ -1,8 +1,11 @@
+import logging
 import time
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+logger = logging.getLogger(__name__)
 
 
 class UnitySimClient:
@@ -22,37 +25,53 @@ class UnitySimClient:
         self._session.mount("http://", HTTPAdapter(max_retries=retry))
         self._session.mount("https://", HTTPAdapter(max_retries=retry))
 
+    def _check_response(self, method: str, path: str, resp: requests.Response, **extra) -> None:
+        """Log and raise on non-OK responses, including server body."""
+        if not resp.ok:
+            logger.error(
+                f"{method} {path} failed [{resp.status_code}]: {resp.text}",
+                extra=extra if extra else None,
+            )
+        resp.raise_for_status()
+
     def status(self) -> dict:
         """GET /status — check server health."""
+        logger.debug("GET /status")
         resp = self._session.get(f"{self.base_url}/status", timeout=10)
-        resp.raise_for_status()
+        self._check_response("GET", "/status", resp)
         return resp.json()
 
     def capture(self) -> dict:
         """GET /capture — capture screenshot without executing any action."""
+        logger.debug("GET /capture")
         resp = self._session.get(f"{self.base_url}/capture", timeout=10)
-        resp.raise_for_status()
+        self._check_response("GET", "/capture", resp)
         return resp.json()
 
     def reset(self) -> dict:
         """POST /reset — start a new episode, returns initial observation."""
+        logger.debug("POST /reset")
         resp = self._session.post(f"{self.base_url}/reset", timeout=45)
-        resp.raise_for_status()
+        self._check_response("POST", "/reset", resp)
         return resp.json()
 
     def world_state(self) -> dict:
         """GET /world_state — get ball positions, claw position, camera basis vectors."""
+        logger.debug("GET /world_state")
         resp = self._session.get(f"{self.base_url}/world_state", timeout=10)
-        resp.raise_for_status()
+        self._check_response("GET", "/world_state", resp)
         return resp.json()
 
     def step(self, action: dict) -> dict:
         """POST /step — fire-and-forget action execution. Returns immediately."""
+        logger.debug(f"POST /step | action={action}")
         resp = self._session.post(
             f"{self.base_url}/step",
             json=action,
             timeout=5,
         )
+        if not resp.ok:
+            logger.error(f"POST /step failed [{resp.status_code}]: {resp.text} | action={action}")
         resp.raise_for_status()
         return resp.json()
 
@@ -64,6 +83,8 @@ class UnitySimClient:
             if not status.get("action_in_progress", False):
                 return status
             time.sleep(poll_interval)
+        elapsed = time.time() - start
+        logger.error(f"wait_action_complete timed out after {elapsed:.1f}s (limit={timeout}s)")
         raise TimeoutError(f"Action not completed within {timeout}s")
 
     def step_and_observe(self, action: dict, settle: float = 0.3) -> dict:
